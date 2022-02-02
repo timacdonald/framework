@@ -1366,6 +1366,12 @@ class Builder
                             }];
             }
 
+            if (! $constraints instanceof Closure) {
+                $constraints = function ($builder) use ($constraints) {
+                    $builder->with($constraints);
+                };
+            }
+
             // We need to separate out any nested includes, which allows the developers
             // to load deep relationships using "dots" without stating each level of
             // the relationship with its own key in the array of eager-load names.
