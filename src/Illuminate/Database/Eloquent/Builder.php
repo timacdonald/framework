@@ -25,7 +25,8 @@ use ReflectionMethod;
  */
 class Builder
 {
-    use Concerns\QueriesRelationships, ForwardsCalls;
+    use Concerns\QueriesRelationships;
+    use ForwardsCalls;
     use BuildsQueries {
         sole as baseSole;
     }
@@ -309,7 +310,9 @@ class Builder
     public function orWhere($column, $operator = null, $value = null)
     {
         [$value, $operator] = $this->query->prepareValueAndOperator(
-            $value, $operator, func_num_args() === 2
+            $value,
+            $operator,
+            func_num_args() === 2
         );
 
         return $this->where($column, $operator, $value, 'or');
@@ -441,8 +444,9 @@ class Builder
             return $result;
         }
 
-        throw (new ModelNotFoundException)->setModel(
-            get_class($this->model), $id
+        throw (new ModelNotFoundException())->setModel(
+            get_class($this->model),
+            $id
         );
     }
 
@@ -524,7 +528,7 @@ class Builder
             return $model;
         }
 
-        throw (new ModelNotFoundException)->setModel(get_class($this->model));
+        throw (new ModelNotFoundException())->setModel(get_class($this->model));
     }
 
     /**
@@ -563,7 +567,7 @@ class Builder
         try {
             return $this->baseSole($columns);
         } catch (RecordsNotFoundException $exception) {
-            throw (new ModelNotFoundException)->setModel(get_class($this->model));
+            throw (new ModelNotFoundException())->setModel(get_class($this->model));
         }
     }
 
@@ -670,7 +674,8 @@ class Builder
         // of models which have been eagerly hydrated and are readied for return.
         return $relation->match(
             $relation->initRelation($models, $name),
-            $relation->getEager(), $name
+            $relation->getEager(),
+            $name
         );
     }
 
@@ -959,7 +964,9 @@ class Builder
     public function increment($column, $amount = 1, array $extra = [])
     {
         return $this->toBase()->increment(
-            $column, $amount, $this->addUpdatedAtColumn($extra)
+            $column,
+            $amount,
+            $this->addUpdatedAtColumn($extra)
         );
     }
 
@@ -974,7 +981,9 @@ class Builder
     public function decrement($column, $amount = 1, array $extra = [])
     {
         return $this->toBase()->decrement(
-            $column, $amount, $this->addUpdatedAtColumn($extra)
+            $column,
+            $amount,
+            $this->addUpdatedAtColumn($extra)
         );
     }
 
@@ -1130,7 +1139,8 @@ class Builder
             // care of grouping the "wheres" properly so the logical order doesn't get
             // messed up when adding scopes. Then we'll return back out the builder.
             $builder = $builder->callNamedScope(
-                $scope, Arr::wrap($parameters)
+                $scope,
+                Arr::wrap($parameters)
             );
         }
 
@@ -1234,11 +1244,13 @@ class Builder
         $query->wheres = [];
 
         $this->groupWhereSliceForScope(
-            $query, array_slice($allWheres, 0, $originalWhereCount)
+            $query,
+            array_slice($allWheres, 0, $originalWhereCount)
         );
 
         $this->groupWhereSliceForScope(
-            $query, array_slice($allWheres, $originalWhereCount)
+            $query,
+            array_slice($allWheres, $originalWhereCount)
         );
     }
 
@@ -1258,7 +1270,8 @@ class Builder
         // we don't add any unnecessary nesting thus keeping the query clean.
         if ($whereBooleans->contains('or')) {
             $query->wheres[] = $this->createNestedWhere(
-                $whereSlice, $whereBooleans->first()
+                $whereSlice,
+                $whereBooleans->first()
             );
         } else {
             $query->wheres = array_merge($query->wheres, $whereSlice);
@@ -1353,6 +1366,20 @@ class Builder
         $results = [];
 
         foreach ($relations as $name => $constraints) {
+            if (is_array($constraints) && is_string($name)) {
+                [$name, $selectConstraint] = Str::contains($name, ':')
+                    ? $this->createSelectWithConstraint($name)
+                    : [$name, static function () {
+                        //
+                    }];
+
+                $constraints = function ($query) use ($constraints, $selectConstraint) {
+                    $selectConstraint($query);
+
+                    $query->with($constraints);
+                };
+            }
+
             // If the "name" value is a numeric key, we can assume that no constraints
             // have been specified. We will just put an empty Closure there so that
             // we can treat these all the same while we are looping through them.
@@ -1364,12 +1391,6 @@ class Builder
                             : [$name, static function () {
                                 //
                             }];
-            }
-
-            if (! $constraints instanceof Closure) {
-                $constraints = function ($builder) use ($constraints) {
-                    $builder->with($constraints);
-                };
             }
 
             // We need to separate out any nested includes, which allows the developers
@@ -1710,8 +1731,8 @@ class Builder
     protected static function registerMixin($mixin, $replace)
     {
         $methods = (new ReflectionClass($mixin))->getMethods(
-                ReflectionMethod::IS_PUBLIC | ReflectionMethod::IS_PROTECTED
-            );
+            ReflectionMethod::IS_PUBLIC | ReflectionMethod::IS_PROTECTED
+        );
 
         foreach ($methods as $method) {
             if ($replace || ! static::hasGlobalMacro($method->name)) {
