@@ -883,7 +883,8 @@ class RouteRegistrarTest extends TestCase
     // TODO: handle users passing through ".pdf" with the point.
     // TODO: how does the request handle this when you ask for all the bindings?
     // TODO: how does the controller handle this when you do implicity route binding in the controller?
-    // TODO: should this handle
+    // TODO: perf testing
+    // TODO: don't allow both optional and required extensions
     public function testItCanRegisterRequiredExtensions()
     {
         $route = $this->router->get('users', function () {
@@ -893,10 +894,10 @@ class RouteRegistrarTest extends TestCase
         $this->assertFalse($route->matches(Request::create('users', 'GET')));
 
         $this->assertTrue($route->matches(Request::create('users.csv', 'GET')));
-        // $this->assertTrue($route->matches(Request::create('users.pdf', 'GET')));
+        $this->assertTrue($route->matches(Request::create('users.pdf', 'GET')));
 
-        // $this->assertFalse($route->matches(Request::create('users', 'GET')));
-        // $this->assertFalse($route->matches(Request::create('users.json', 'GET')));
+        $this->assertFalse($route->matches(Request::create('users', 'GET')));
+        $this->assertFalse($route->matches(Request::create('users.json', 'GET')));
     }
 
     public function testItCanRegisterOptionalExtensions()
@@ -910,40 +911,6 @@ class RouteRegistrarTest extends TestCase
         $this->assertTrue($route->matches(Request::create('users', 'GET')));
 
         $this->assertFalse($route->matches(Request::create('users.json', 'GET')));
-    }
-
-    public function testItCannotRegisterOptionalAndRequiredParameters()
-    {
-        //
-    }
-
-    public function testPerformance()
-    {
-        //$users = $this->router->get('users', function () {
-        //    //
-        //})->requiredExtensions(['csv', '.pdf']);
-
-        //$posts = $this->router->get('posts', function () {
-        //    //
-        //})->requiredExtensions(['csv', '.pdf']);
-
-
-        // $start = microtime(true);
-        // for ($i = 0; $i < 100_000; $i++) {
-        //     $users->matches(Request::create('GET', '/users'));
-        //     $users->matches(Request::create('GET', '/users.pdf'));
-        //     $users->matches(Request::create('GET', '/users.csv'));
-        //     $users->matches(Request::create('GET', '/users.json'));
-        // }
-        // $end = microtime(true);
-
-        // echo PHP_EOL;
-        // echo $end - $start;
-
-        // 3.4110691547394
-        // 3.4763748645782
-        // 3.5068619251251
-        // 3.3437490463257
     }
 
     /**
