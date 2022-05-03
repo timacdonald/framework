@@ -234,7 +234,8 @@ class Route
         }
 
         return $callable(...array_values($this->resolveMethodDependencies(
-            $this->parametersWithoutNulls(), new ReflectionFunction($callable)
+            $this->parametersWithoutNulls(),
+            new ReflectionFunction($callable)
         )));
     }
 
@@ -258,7 +259,9 @@ class Route
     protected function runController()
     {
         return $this->controllerDispatcher()->dispatch(
-            $this, $this->getController(), $this->getControllerMethod()
+            $this,
+            $this->getController(),
+            $this->getControllerMethod()
         );
     }
 
@@ -755,7 +758,8 @@ class Route
         $this->action['domain'] = $parsed->uri;
 
         $this->bindingFields = array_merge(
-            $this->bindingFields, $parsed->bindingFields
+            $this->bindingFields,
+            $parsed->bindingFields
         );
 
         return $this;
@@ -896,6 +900,14 @@ class Route
 
     public function requiredExtensions(array $extensions)
     {
+        $extensionRegex = collect($extensions)
+            ->map(fn ($extension) => '(\\.'.preg_quote($extension).')')
+            ->implode('|');
+
+        return $this->setUri("{$this->uri()}{extension}")
+            ->where([
+                'extension' => "^{$extensionRegex}$",
+            ]);
     }
 
     /**
@@ -1025,7 +1037,8 @@ class Route
         $this->computedMiddleware = [];
 
         return $this->computedMiddleware = Router::uniqueMiddleware(array_merge(
-            $this->middleware(), $this->controllerMiddleware()
+            $this->middleware(),
+            $this->controllerMiddleware()
         ));
     }
 
@@ -1050,7 +1063,8 @@ class Route
         }
 
         $this->action['middleware'] = array_merge(
-            (array) ($this->action['middleware'] ?? []), $middleware
+            (array) ($this->action['middleware'] ?? []),
+            $middleware
         );
 
         return $this;
@@ -1082,7 +1096,8 @@ class Route
         }
 
         return $this->controllerDispatcher()->getMiddleware(
-            $this->getController(), $this->getControllerMethod()
+            $this->getController(),
+            $this->getControllerMethod()
         );
     }
 
@@ -1095,7 +1110,8 @@ class Route
     public function withoutMiddleware($middleware)
     {
         $this->action['excluded_middleware'] = array_merge(
-            (array) ($this->action['excluded_middleware'] ?? []), Arr::wrap($middleware)
+            (array) ($this->action['excluded_middleware'] ?? []),
+            Arr::wrap($middleware)
         );
 
         return $this;
@@ -1220,9 +1236,13 @@ class Route
     public function toSymfonyRoute()
     {
         return new SymfonyRoute(
-            preg_replace('/\{(\w+?)\?\}/', '{$1}', $this->uri()), $this->getOptionalParameterNames(),
-            $this->wheres, ['utf8' => true],
-            $this->getDomain() ?: '', [], $this->methods
+            preg_replace('/\{(\w+?)\?\}/', '{$1}', $this->uri()),
+            $this->getOptionalParameterNames(),
+            $this->wheres,
+            ['utf8' => true],
+            $this->getDomain() ?: '',
+            [],
+            $this->methods
         );
     }
 

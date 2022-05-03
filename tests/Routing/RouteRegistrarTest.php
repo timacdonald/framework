@@ -884,15 +884,34 @@ class RouteRegistrarTest extends TestCase
         $this->assertSame('users.index', $this->getRoute()->getName());
     }
 
+    // TODO: nice way to get the extension off of the request.
+    // TODO: handle users passing through ".pdf" with the point.
     public function testItCanRegisterExtensions()
     {
-        $response = $this->router->get('users', function () {
+        $route = $this->router->get('users', function () {
+            //
+        })->requiredExtensions(['csv', 'pdf']);
+
+        $this->assertTrue($route->matches(Request::create('users.csv', 'GET')));
+        $this->assertTrue($route->matches(Request::create('users.pdf', 'GET')));
+    }
+
+    public function testItDoesntMatchWhenMissingARequiredExtension()
+    {
+        $route = $this->router->get('users', function () {
+            //
+        })->requiredExtensions(['csv', 'pdf']);
+
+        $this->assertFalse($route->matches(Request::create('users', 'GET')));
+    }
+
+    public function testItDoesntMatchWhenUsingAnIncorrectExtension()
+    {
+        $route = $this->router->get('users', function () {
             return 'ok';
-        })->requiredExtensions(['.csv', '.pdf']);
+        })->requiredExtensions(['csv', 'pdf']);
 
-        $this->seeResponse('ok', Request::create('users.csv', 'GET'));
-
-        // TODO: nice way to get the extension off of the request.
+        $this->assertFalse($route->matches(Request::create('users.json', 'GET')));
     }
 
     public function testItCanRegisterExtensionsWilMultipleParts()
