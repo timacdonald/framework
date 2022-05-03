@@ -21,9 +21,7 @@ use Symfony\Component\Routing\Route as SymfonyRoute;
 
 class Route
 {
-    use CreatesRegularExpressionRouteConstraints;
-    use Macroable;
-    use RouteDependencyResolverTrait;
+    use CreatesRegularExpressionRouteConstraints, Macroable, RouteDependencyResolverTrait;
 
     /**
      * The URI pattern the route responds to.
@@ -203,7 +201,7 @@ class Route
      */
     public function run()
     {
-        $this->container = $this->container ?: new Container();
+        $this->container = $this->container ?: new Container;
 
         try {
             if ($this->isControllerAction()) {
@@ -240,8 +238,7 @@ class Route
         }
 
         return $callable(...array_values($this->resolveMethodDependencies(
-            $this->parametersWithoutNulls(),
-            new ReflectionFunction($callable)
+            $this->parametersWithoutNulls(), new ReflectionFunction($callable)
         )));
     }
 
@@ -265,9 +262,7 @@ class Route
     protected function runController()
     {
         return $this->controllerDispatcher()->dispatch(
-            $this,
-            $this->getController(),
-            $this->getControllerMethod()
+            $this, $this->getController(), $this->getControllerMethod()
         );
     }
 
@@ -764,8 +759,7 @@ class Route
         $this->action['domain'] = $parsed->uri;
 
         $this->bindingFields = array_merge(
-            $this->bindingFields,
-            $parsed->bindingFields
+            $this->bindingFields, $parsed->bindingFields
         );
 
         return $this;
@@ -1055,8 +1049,7 @@ class Route
         $this->computedMiddleware = [];
 
         return $this->computedMiddleware = Router::uniqueMiddleware(array_merge(
-            $this->middleware(),
-            $this->controllerMiddleware()
+            $this->middleware(), $this->controllerMiddleware()
         ));
     }
 
@@ -1114,8 +1107,7 @@ class Route
         }
 
         return $this->controllerDispatcher()->getMiddleware(
-            $this->getController(),
-            $this->getControllerMethod()
+            $this->getController(), $this->getControllerMethod()
         );
     }
 
@@ -1128,8 +1120,7 @@ class Route
     public function withoutMiddleware($middleware)
     {
         $this->action['excluded_middleware'] = array_merge(
-            (array) ($this->action['excluded_middleware'] ?? []),
-            Arr::wrap($middleware)
+            (array) ($this->action['excluded_middleware'] ?? []), Arr::wrap($middleware)
         );
 
         return $this;
@@ -1241,8 +1232,8 @@ class Route
         // validator implementations. We will spin through each one making sure it
         // passes and then we will know if the route as a whole matches request.
         return static::$validators = [
-            new UriValidator(), new MethodValidator(),
-            new SchemeValidator(), new HostValidator(),
+            new UriValidator, new MethodValidator,
+            new SchemeValidator, new HostValidator,
         ];
     }
 
@@ -1254,13 +1245,9 @@ class Route
     public function toSymfonyRoute()
     {
         return new SymfonyRoute(
-            preg_replace('/\{(\w+?)\?\}/', '{$1}', $this->uri()),
-            $this->getOptionalParameterNames(),
-            $this->wheres,
-            ['utf8' => true],
-            $this->getDomain() ?: '',
-            [],
-            $this->methods
+            preg_replace('/\{(\w+?)\?\}/', '{$1}', $this->uri()), $this->getOptionalParameterNames(),
+            $this->wheres, ['utf8' => true],
+            $this->getDomain() ?: '', [], $this->methods
         );
     }
 
