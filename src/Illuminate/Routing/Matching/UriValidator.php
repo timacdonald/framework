@@ -17,16 +17,16 @@ class UriValidator implements ValidatorInterface
      */
     public function matches(Route $route, Request $request)
     {
-        $path = rawurldecode(
+        $path = $fullPath = rawurldecode(
             rtrim($request->getPathInfo(), '/') ?: '/'
         );
 
         if ($route->extensionRegex !== null) {
-            if (preg_match($route->extensionRegex, $path) === 1) {
-                $path = Str::beforeLast($path, '.');
-            } elseif ($route->extensionRequired) {
-                return false;
-            }
+            $path = preg_replace($route->extensionRegex, '', $path);
+        }
+
+        if ($route->extensionRequired && $path === $fullPath) {
+            return false;
         }
 
         return preg_match($route->getCompiled()->getRegex(), $path);
