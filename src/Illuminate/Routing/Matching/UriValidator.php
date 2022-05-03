@@ -4,6 +4,7 @@ namespace Illuminate\Routing\Matching;
 
 use Illuminate\Http\Request;
 use Illuminate\Routing\Route;
+use Illuminate\Support\Str;
 
 class UriValidator implements ValidatorInterface
 {
@@ -16,8 +17,18 @@ class UriValidator implements ValidatorInterface
      */
     public function matches(Route $route, Request $request)
     {
-        $path = rtrim($request->getPathInfo(), '/') ?: '/';
+        $path = rawurldecode(
+            rtrim($request->getPathInfo(), '/') ?: '/'
+        );
 
-        return preg_match($route->getCompiled()->getRegex(), rawurldecode($path));
+        if ($route->extensionRegex !== null) {
+            if (preg_match($route->extensionRegex, $path) === 1) {
+                $path = Str::beforeLast($path, '.');
+            } elseif ($route->extensionRequired) {
+                return false;
+            }
+        }
+
+        return preg_match($route->getCompiled()->getRegex(), $path);
     }
 }

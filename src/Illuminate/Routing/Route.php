@@ -21,7 +21,9 @@ use Symfony\Component\Routing\Route as SymfonyRoute;
 
 class Route
 {
-    use CreatesRegularExpressionRouteConstraints, Macroable, RouteDependencyResolverTrait;
+    use CreatesRegularExpressionRouteConstraints;
+    use Macroable;
+    use RouteDependencyResolverTrait;
 
     /**
      * The URI pattern the route responds to.
@@ -86,9 +88,9 @@ class Route
      */
     public $parameterNames;
 
-    public $requiredExtensions = [];
+    public $extensionRegex;
 
-    public $optionalExtensions = [];
+    public $extensionRequired = false;
 
     /**
      * The array of the matched parameters' original values.
@@ -201,7 +203,7 @@ class Route
      */
     public function run()
     {
-        $this->container = $this->container ?: new Container;
+        $this->container = $this->container ?: new Container();
 
         try {
             if ($this->isControllerAction()) {
@@ -904,29 +906,26 @@ class Route
 
     public function requiredExtensions(array $extensions)
     {
-        $this->requiredExtensions = collect($extensions)
-            ->map(fn ($extension) => '('.preg_quote(Str::start($extension, '.')).')')
-            ->implode('|');
+        $regex = collect($extensions)
+            ->map(fn ($extension) => '(\\'.Str::start($extension, '.').')')
+            ->join('|');
+
+        $this->extensionRegex = "/({$regex}){1}$/";
+
+        $this->extensionRequired = true;
 
         return $this;
-        // $extensionRegex =
-
-        // return $this->setUri("{$this->uri()}{extension}")
-        //     ->where([
-        //         'extension' => "^{$extensionRegex}$",
-        //     ]);
     }
 
     public function optionalExtensions(array $extensions)
     {
-        $extensionRegex = collect($extensions)
-            ->map(fn ($extension) => '('.preg_quote(Str::start($extension, '.')).')')
-            ->implode('|');
+        $regex = collect($extensions)
+            ->map(fn ($extension) => '(\\'.Str::start($extension, '.').')')
+            ->join('|');
 
-        return $this->setUri("{$this->uri()}{extension?}")
-            ->where([
-                'extension' => "^{$extensionRegex}$",
-            ]);
+        $this->extensionRegex = "/({$regex}){1}$/";
+
+        return $this;
     }
 
     /**
@@ -1242,8 +1241,8 @@ class Route
         // validator implementations. We will spin through each one making sure it
         // passes and then we will know if the route as a whole matches request.
         return static::$validators = [
-            new UriValidator, new MethodValidator,
-            new SchemeValidator, new HostValidator,
+            new UriValidator(), new MethodValidator(),
+            new SchemeValidator(), new HostValidator(),
         ];
     }
 
