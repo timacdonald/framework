@@ -917,7 +917,7 @@ class Route
             ->map(fn ($extension) => '(\\'.Str::start($extension, '.').')')
             ->join('|');
 
-        $this->extensionRegex = "/({$regex}){1}$/";
+        $this->extensionRegex = "/({$regex}){0,1}$/";
 
         return $this;
     }
