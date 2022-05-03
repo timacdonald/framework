@@ -894,6 +894,10 @@ class Route
         return false;
     }
 
+    public function requiredExtensions(array $extensions)
+    {
+    }
+
     /**
      * Set the handler for the route.
      *

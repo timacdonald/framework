@@ -884,6 +884,22 @@ class RouteRegistrarTest extends TestCase
         $this->assertSame('users.index', $this->getRoute()->getName());
     }
 
+    public function testItCanRegisterExtensions()
+    {
+        $response = $this->router->get('users', function () {
+            return 'ok';
+        })->requiredExtensions(['.csv', '.pdf']);
+
+        $this->seeResponse('ok', Request::create('users.csv', 'GET'));
+
+        // TODO: nice way to get the extension off of the request.
+    }
+
+    public function testItCanRegisterExtensionsWilMultipleParts()
+    {
+        // 'users.v2.json' ?
+    }
+
     /**
      * Get the last route registered with the router.
      *
