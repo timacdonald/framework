@@ -86,6 +86,10 @@ class Route
      */
     public $parameterNames;
 
+    public $requiredExtensions = [];
+
+    public $optionalExtensions = [];
+
     /**
      * The array of the matched parameters' original values.
      *
@@ -900,11 +904,26 @@ class Route
 
     public function requiredExtensions(array $extensions)
     {
-        $extensionRegex = collect($extensions)
-            ->map(fn ($extension) => '(\\.'.preg_quote($extension).')')
+        $this->requiredExtensions = collect($extensions)
+            ->map(fn ($extension) => '('.preg_quote(Str::start($extension, '.')).')')
             ->implode('|');
 
-        return $this->setUri("{$this->uri()}{extension}")
+        return $this;
+        // $extensionRegex =
+
+        // return $this->setUri("{$this->uri()}{extension}")
+        //     ->where([
+        //         'extension' => "^{$extensionRegex}$",
+        //     ]);
+    }
+
+    public function optionalExtensions(array $extensions)
+    {
+        $extensionRegex = collect($extensions)
+            ->map(fn ($extension) => '('.preg_quote(Str::start($extension, '.')).')')
+            ->implode('|');
+
+        return $this->setUri("{$this->uri()}{extension?}")
             ->where([
                 'extension' => "^{$extensionRegex}$",
             ]);
