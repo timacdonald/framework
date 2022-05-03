@@ -23,10 +23,10 @@ class UriValidator implements ValidatorInterface
 
         if ($route->extensionRegex !== null) {
             $path = preg_replace($route->extensionRegex, '', $path);
-        }
 
-        if ($route->extensionRequired && $path === $fullPath) {
-            return false;
+            if ($route->extensionRequired && $path === $fullPath) {
+                return false;
+            }
         }
 
         return preg_match($route->getCompiled()->getRegex(), $path);
