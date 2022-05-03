@@ -1074,8 +1074,7 @@ class Route
         }
 
         $this->action['middleware'] = array_merge(
-            (array) ($this->action['middleware'] ?? []),
-            $middleware
+            (array) ($this->action['middleware'] ?? []), $middleware
         );
 
         return $this;
