@@ -141,7 +141,7 @@ class EloquentMultiDimensionalArrayEagerLoadingTest extends DatabaseTestCase
         $this->assertCount(1, $users);
         $this->assertTrue($users[0]->relationLoaded('posts'));
         $this->assertCount(2, $users[0]->posts);
-        $this->assertTrue($users[0]->posts->every(fn ($post) => $post->comments_count === 1));
+        $users[0]->posts->every(fn ($post) => $this->assertSame(1, $post->comments_count));
         $this->assertTrue($users[0]->posts->every->relationLoaded('comments'));
         $this->assertCount(2, $users[0]->posts->flatMap->comments);
         $this->assertTrue($users[0]->posts->flatMap->comments->every->relationLoaded('tags'));
@@ -166,10 +166,10 @@ class EloquentMultiDimensionalArrayEagerLoadingTest extends DatabaseTestCase
         $this->assertCount(1, $users);
         $this->assertTrue($users[0]->relationLoaded('posts'));
         $this->assertCount(2, $users[0]->posts);
-        $this->assertTrue($users[0]->posts->every(fn ($post) => array_keys($post->getAttributes()) === ['id', 'title', 'user_id']));
+        $users[0]->posts->every(fn ($post) => $this->assertSame(['id', 'title', 'user_id'], array_keys($post->getAttributes())));
         $this->assertTrue($users[0]->posts->every->relationLoaded('comments'));
         $this->assertCount(2, $users[0]->posts->flatMap->comments);
-        $this->assertTrue($users[0]->posts->flatMap->comments->every(fn ($post) => array_keys($post->getAttributes()) === ['id', 'content', 'post_id']));
+        $users[0]->posts->flatMap->comments->every(fn ($post) => $this->assertSame(['id', 'content', 'post_id'], array_keys($post->getAttributes())));
         $this->assertTrue($users[0]->posts->flatMap->comments->every->relationLoaded('tags'));
         $this->assertCount(6, $users[0]->posts->flatMap->comments->flatMap->tags);
     }
@@ -214,10 +214,10 @@ class EloquentMultiDimensionalArrayEagerLoadingTest extends DatabaseTestCase
         $this->assertCount(1, $users);
         $this->assertTrue($users[0]->relationLoaded('posts'));
         $this->assertCount(2, $users[0]->posts);
-        $this->assertTrue($users[0]->posts->every(fn ($post) => $post->content === null));
+        $users[0]->posts->every(fn ($post) => $this->assertNull($post->content));
         $this->assertTrue($users[0]->posts->every->relationLoaded('comments'));
         $this->assertCount(2, $users[0]->posts->flatMap->comments);
-        $this->assertTrue($users[0]->posts->flatMap->comments->every(fn ($comment) => $comment->tags_count === 3));
+        $users[0]->posts->flatMap->comments->every(fn ($comment) => $this->assertSame([3, $comment->tags_count)));
         $this->assertTrue($users[0]->posts->flatMap->comments->every->relationLoaded('tags'));
         $this->assertCount(6, $users[0]->posts->flatMap->comments->flatMap->tags);
     }
