@@ -1506,8 +1506,10 @@ class Builder implements BuilderContract
     {
         return function ($builder) use ($constraints) {
             foreach ($constraints as $constraint) {
-                $constraint($builder);
+                $builder = $constraint($builder) ?? $builder;
             }
+
+            return $builder;
         };
     }
 
