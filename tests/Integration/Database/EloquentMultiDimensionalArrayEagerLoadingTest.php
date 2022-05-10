@@ -8,7 +8,13 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Tests\Integration\Database\DatabaseTestCase;
 
-// Not supported...
+// I'm not smart enough to merge selects, so the following combinations of old
+// and new syntax are not supported. That being said, they aren't supported in
+// the current dot notation style either
+// e.g. User::with('post:id')->with('post:user_id')
+// does not merge both attribute selections, so it is still consistent with
+// the current approach.
+//
 // User::query()
 //     ->with([
 //         'posts.comments' => fn ($q) => $q->addSelect(['id']),
