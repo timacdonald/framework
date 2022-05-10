@@ -141,7 +141,7 @@ class EloquentMultiDimensionalArrayEagerLoadingTest extends DatabaseTestCase
         $this->assertCount(1, $users);
         $this->assertTrue($users[0]->relationLoaded('posts'));
         $this->assertCount(2, $users[0]->posts);
-        $users[0]->posts->every(fn ($post) => $this->assertSame(1, $post->comments_count));
+        $users[0]->posts->every(fn ($post) => $this->assertEquals(1, $post->comments_count));
         $this->assertTrue($users[0]->posts->every->relationLoaded('comments'));
         $this->assertCount(2, $users[0]->posts->flatMap->comments);
         $this->assertTrue($users[0]->posts->flatMap->comments->every->relationLoaded('tags'));
@@ -217,7 +217,7 @@ class EloquentMultiDimensionalArrayEagerLoadingTest extends DatabaseTestCase
         $users[0]->posts->every(fn ($post) => $this->assertNull($post->content));
         $this->assertTrue($users[0]->posts->every->relationLoaded('comments'));
         $this->assertCount(2, $users[0]->posts->flatMap->comments);
-        $users[0]->posts->flatMap->comments->every(fn ($comment) => $this->assertSame(3, $comment->tags_count));
+        $users[0]->posts->flatMap->comments->every(fn ($comment) => $this->assertEquals(3, $comment->tags_count));
         $this->assertTrue($users[0]->posts->flatMap->comments->every->relationLoaded('tags'));
         $this->assertCount(6, $users[0]->posts->flatMap->comments->flatMap->tags);
     }
