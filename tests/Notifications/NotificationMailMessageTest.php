@@ -2,6 +2,8 @@
 
 namespace Illuminate\Tests\Notifications;
 
+use Illuminate\Contracts\Mail\Attachable;
+use Illuminate\Mail\Attachment;
 use Illuminate\Notifications\Messages\MailMessage;
 use PHPUnit\Framework\TestCase;
 
@@ -269,5 +271,69 @@ class NotificationMailMessageTest extends TestCase
         $message = new MailMessage;
         $message->unless('truthy', $callback, $default);
         $this->assertSame([['truthy@example.com', null]], $message->cc);
+    }
+
+    public function testItAttachesFilesViaAttachableContractFromPath()
+    {
+        $message = new MailMessage;
+
+        $message->attach(new class () implements Attachable {
+            public function toMailAttachment()
+            {
+                return Attachment::fromPath(__DIR__.'/foo.jpg')
+                    ->as('bar')
+                    ->withMime('text/css');
+            }
+        });
+
+        $this->assertSame([
+            'file' => __DIR__.'/foo.jpg',
+            'options' => [
+                'as' => 'bar',
+                'mime' => 'text/css',
+            ]
+        ], $message->attachments[0]);
+    }
+
+    public function testItAttachesFilesViaAttachableContractFromData()
+    {
+        $mailMessage = new MailMessage();
+
+        $mailMessage->attach(new class () implements Attachable {
+            public function toMailAttachment()
+            {
+                return Attachment::fromData('expected attachment body', 'foo.jpg')
+                    ->withMime('text/css');
+            }
+        });
+
+        $this->assertSame([
+            'data' => 'expected attachment body',
+            'name' => 'foo.jpg',
+            'options' => [
+                'mime' => 'text/css',
+            ]
+        ], $mailMessage->rawAttachments[0]);
+    }
+
+    public function testItAttachesFilesViaAttachableContractFromDataWithClosure()
+    {
+        $mailMessage = new MailMessage();
+
+        $mailMessage->attach(new class () implements Attachable {
+            public function toMailAttachment()
+            {
+                return Attachment::fromData(fn () => 'expected attachment body', 'foo.jpg')
+                    ->withMime('text/css');
+            }
+        });
+
+        $this->assertSame([
+            'data' => 'expected attachment body',
+            'name' => 'foo.jpg',
+            'options' => [
+                'mime' => 'text/css',
+            ]
+        ], $mailMessage->rawAttachments[0]);
     }
 }

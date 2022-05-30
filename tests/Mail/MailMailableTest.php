@@ -2,7 +2,9 @@
 
 namespace Illuminate\Tests\Mail;
 
+use Illuminate\Contracts\Mail\Attachable;
 use Illuminate\Contracts\View\Factory;
+use Illuminate\Mail\Attachment;
 use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailer;
 use Illuminate\Mail\Transport\ArrayTransport;
@@ -493,6 +495,97 @@ class MailMailableTest extends TestCase
         $this->assertSame('hello@laravel.com', $sentMessage->getEnvelope()->getRecipients()[0]->getAddress());
         $this->assertStringContainsString('X-Tag: test', $sentMessage->toString());
         $this->assertStringContainsString('X-Tag: foo', $sentMessage->toString());
+    }
+
+    public function testItAttachesFilesViaAttachableContractFromPath()
+    {
+        $mailable = new WelcomeMailableStub;
+
+        $mailable->attach(new class() implements Attachable {
+            public function toMailAttachment()
+            {
+                return Attachment::fromPath(__DIR__.'/foo.jpg')
+                    ->as('bar')
+                    ->withMime('image/jpeg');
+            }
+        });
+
+        $this->assertSame([
+            'file' => __DIR__.'/foo.jpg',
+            'options' => [
+                'as' => 'bar',
+                'mime' => 'image/jpeg',
+            ]
+        ], $mailable->attachments[0]);
+    }
+
+    public function testItAttachesFilesViaAttachableContractFromData()
+    {
+        $mailable = new WelcomeMailableStub;
+
+        $mailable->attach(new class() implements Attachable {
+            public function toMailAttachment()
+            {
+                return Attachment::fromData('expected attachment body', 'foo.jpg')
+                    ->as('bar')
+                    ->withMime('image/jpeg');
+            }
+        });
+
+        $this->assertSame([
+            'data' => 'expected attachment body',
+            'name' => 'bar',
+            'options' => [
+                'mime' => 'image/jpeg',
+            ]
+        ], $mailable->rawAttachments[0]);
+    }
+
+    public function testItAttachesFilesViaAttachableContractFromDataWithClosure()
+    {
+        $mailable = new WelcomeMailableStub;
+
+        $mailable->attach(new class() implements Attachable {
+            public function toMailAttachment()
+            {
+                return Attachment::fromData(fn () => 'expected attachment body', 'foo.jpg')
+                    ->as('bar')
+                    ->withMime('image/jpeg');
+            }
+        });
+
+        $this->assertSame([
+            'data' => 'expected attachment body',
+            'name' => 'bar',
+            'options' => [
+                'mime' => 'image/jpeg',
+            ]
+        ], $mailable->rawAttachments[0]);
+    }
+
+    public function testItAttachesFilesViaAttachableContractFromMacroConstructor()
+    {
+        Attachment::macro('fromInvoice', function ($name) {
+            return Attachment::fromData(fn () => 'pdf content', $name);
+        });
+        $mailable = new WelcomeMailableStub;
+
+        $mailable->attach(new class() implements Attachable {
+            public function toMailAttachment()
+            {
+                return Attachment::fromInvoice('foo')
+                    ->as('bar')
+                    ->withMime('image/jpeg');
+            }
+        });
+
+        $this->assertSame([
+            'data' => 'pdf content',
+            'name' => 'bar',
+            'options' => [
+                'mime' => 'image/jpeg',
+            ]
+        ], $mailable->rawAttachments[0]);
     }
 }
 

@@ -2,6 +2,7 @@
 
 namespace Illuminate\Mail;
 
+use Illuminate\Contracts\Mail\Attachable;
 use Illuminate\Support\Str;
 use Illuminate\Support\Traits\ForwardsCalls;
 use Symfony\Component\Mime\Address;
@@ -290,12 +291,20 @@ class Message
     /**
      * Attach a file to the message.
      *
-     * @param  string  $file
+     * @param  string|\Illuminate\Contracts\Mail\Attachable|\Illuminate\Mail\Attachment  $file
      * @param  array  $options
      * @return $this
      */
     public function attach($file, array $options = [])
     {
+        if ($file instanceof Attachable) {
+            $file = $file->toMailAttachment();
+        }
+
+        if ($file instanceof Attachment) {
+            return $file->attachTo($this);
+        }
+
         $this->message->attachFromPath($file, $options['as'] ?? null, $options['mime'] ?? null);
 
         return $this;
