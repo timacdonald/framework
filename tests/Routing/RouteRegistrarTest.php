@@ -73,7 +73,8 @@ class RouteRegistrarTest extends TestCase
 
     public function testMiddlewareAsStringableObject()
     {
-        $one = new class () implements Stringable {
+        $one = new class implements Stringable
+        {
             public function __toString()
             {
                 return 'one';
@@ -90,7 +91,8 @@ class RouteRegistrarTest extends TestCase
 
     public function testMiddlewareAsStringableObjectOnRouteInstance()
     {
-        $one = new class () implements Stringable {
+        $one = new class implements Stringable
+        {
             public function __toString()
             {
                 return 'one';
@@ -107,7 +109,8 @@ class RouteRegistrarTest extends TestCase
 
     public function testMiddlewareAsArrayWithStringables()
     {
-        $one = new class () implements Stringable {
+        $one = new class implements Stringable
+        {
             public function __toString()
             {
                 return 'one';
@@ -266,7 +269,8 @@ class RouteRegistrarTest extends TestCase
 
     public function testCanRegisterGroupWithStringableMiddleware()
     {
-        $one = new class () implements Stringable {
+        $one = new class implements Stringable
+        {
             public function __toString()
             {
                 return 'one';
@@ -774,7 +778,8 @@ class RouteRegistrarTest extends TestCase
 
     public function testResourceWithMiddlewareAsStringable()
     {
-        $one = new class () implements Stringable {
+        $one = new class implements Stringable
+        {
             public function __toString()
             {
                 return 'one';
