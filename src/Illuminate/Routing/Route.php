@@ -87,8 +87,18 @@ class Route
      */
     public $parameterNames;
 
+    /**
+     * The URL extension regex.
+     *
+     * @var string|null
+     */
     public $extensionRegex;
 
+    /**
+     * Indicates that the URL extension is required.
+     *
+     * @var bool
+     */
     public $extensionRequired = false;
 
     /**
@@ -899,24 +909,42 @@ class Route
         return false;
     }
 
+    /**
+     * Set the required URL extensions for the route.
+     *
+     * @param  array  $extensions
+     * @return $this
+     */
     public function requiredExtensions(array $extensions)
     {
-        $this->validateExtensionHasNotBeenSpecified();
-
-        $regex = collect($extensions)
-            ->map(fn ($extension) => '('.preg_quote(Str::start($extension, '.')).')')
-            ->join('|');
-
-        $this->extensionRegex = "/({$regex}){1}$/";
-
-        $this->extensionRequired = true;
-
-        return $this;
+        return $this->setExtensionRegex($extensions, true);
     }
 
+    /**
+     * Set the optional URL extensions for the route.
+     *
+     * @param  array  $extensions
+     * @return $this
+     */
     public function optionalExtensions(array $extensions)
     {
-        $this->validateExtensionHasNotBeenSpecified();
+        return $this->setExtensionRegex($extensions, false);
+    }
+
+    /**
+     * Set the URL extensions for the route.
+     *
+     * @param  array  $extensions
+     * @param  bool  $required
+     * @return $this
+     *
+     * @throws \RuntimeException
+     */
+    protected function setExtensionRegex(array $extensions, bool $required)
+    {
+        if ($this->extensionRegex !== null) {
+            throw new RuntimeException('You should only call the extension methods once per route.');
+        }
 
         $regex = collect($extensions)
             ->map(fn ($extension) => '('.preg_quote(Str::start($extension, '.')).')')
@@ -924,14 +952,9 @@ class Route
 
         $this->extensionRegex = "/({$regex}){0,1}$/";
 
-        return $this;
-    }
+        $this->extensionRequired = $required;
 
-    protected function validateExtensionHasNotBeenSpecified()
-    {
-        if ($this->extensionRegex !== null) {
-            throw new RuntimeException('You should only call the extension method once per route.');
-        }
+        return $this;
     }
 
     /**

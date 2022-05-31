@@ -918,7 +918,7 @@ class RouteRegistrarTest extends TestCase
     public function testItCannotMixRequiredAndOptionalExtensions()
     {
         $this->expectException(RuntimeException::class);
-        $this->expectExceptionMessage('You should only call the extension method once per route.');
+        $this->expectExceptionMessage('You should only call the extension methods once per route.');
 
         $this->router->get('users', function () {
             //
@@ -928,7 +928,7 @@ class RouteRegistrarTest extends TestCase
     public function testItCannotCanTheRequiredExtensionMethodOnTheSameRouteTwice()
     {
         $this->expectException(RuntimeException::class);
-        $this->expectExceptionMessage('You should only call the extension method once per route.');
+        $this->expectExceptionMessage('You should only call the extension methods once per route.');
 
         $this->router->get('users', function () {
             //
@@ -938,7 +938,7 @@ class RouteRegistrarTest extends TestCase
     public function testItCannotCanTheOptionalExtensionMethodOnTheSameRouteTwice()
     {
         $this->expectException(RuntimeException::class);
-        $this->expectExceptionMessage('You should only call the extension method once per route.');
+        $this->expectExceptionMessage('You should only call the extension methods once per route.');
 
         $this->router->get('users', function () {
             //
