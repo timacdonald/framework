@@ -49,12 +49,18 @@ class RouteExtensionTest extends TestCase
     {
         Route::get('users/{user}', function () {
             return 'extension-'.request()->extension();
-        })->requiredExtensions(['csv']);
+        })->optionalExtensions(['csv']);
 
-        $response = $this->get('users/22.json.csv');
+        $this->get('users/22.json.csv')->assertSeeText('extension-csv');;
+        $this->get('users/22')->assertSeeText('extension-');;
+    }
 
-        $response->assertOk();
-        $response->assertSeeText('extension-csv');
+    public function testItCanRetrieveAnEmptyExtensionFromTheRootUrl()
+    {
+        Route::get('/', function () {
+            return 'extension-'.request()->extension();
+        });
 
+        $this->get('/')->assertSeeText('extension-');;
     }
 }
