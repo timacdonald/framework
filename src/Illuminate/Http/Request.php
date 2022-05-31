@@ -165,6 +165,11 @@ class Request extends SymfonyRequest implements Arrayable, ArrayAccess
         return $pattern === '' ? '/' : $pattern;
     }
 
+    public function extension()
+    {
+        return pathinfo($this->path(), PATHINFO_EXTENSION);
+    }
+
     /**
      * Get the current decoded path info for the request.
      *
