@@ -10,6 +10,7 @@ use Illuminate\Http\Request;
 use Illuminate\Routing\Router;
 use Mockery as m;
 use PHPUnit\Framework\TestCase;
+use RuntimeException;
 use Stringable;
 
 class RouteRegistrarTest extends TestCase
@@ -885,24 +886,20 @@ class RouteRegistrarTest extends TestCase
     }
 
     // TODO: nice way to get the extension off of the request.
-    // TODO: handle users passing through ".pdf" with the point.
     // TODO: how does the request handle this when you ask for all the bindings?
     // TODO: how does the controller handle this when you do implicity route binding in the controller?
     // TODO: perf testing
-    // TODO: don't allow both optional and required extensions
     public function testItCanRegisterRequiredExtensions()
     {
         $route = $this->router->get('users', function () {
             //
         })->requiredExtensions(['csv', '.pdf']);
 
-        $this->assertFalse($route->matches(Request::create('users', 'GET')));
-
         $this->assertTrue($route->matches(Request::create('users.csv', 'GET')));
         $this->assertTrue($route->matches(Request::create('users.pdf', 'GET')));
-
         $this->assertFalse($route->matches(Request::create('users', 'GET')));
         $this->assertFalse($route->matches(Request::create('users.json', 'GET')));
+        $this->assertFalse($route->matches(Request::create('users.json.csv', 'GET')));
     }
 
     public function testItCanRegisterOptionalExtensions()
@@ -911,11 +908,41 @@ class RouteRegistrarTest extends TestCase
             //
         })->optionalExtensions(['csv', '.pdf']);
 
+        $this->assertTrue($route->matches(Request::create('users', 'GET')));
         $this->assertTrue($route->matches(Request::create('users.csv', 'GET')));
         $this->assertTrue($route->matches(Request::create('users.pdf', 'GET')));
-        $this->assertTrue($route->matches(Request::create('users', 'GET')));
-
+        $this->assertFalse($route->matches(Request::create('users.json.csv', 'GET')));
         $this->assertFalse($route->matches(Request::create('users.json', 'GET')));
+    }
+
+    public function testItCannotMixRequiredAndOptionalExtensions()
+    {
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('You should only call the extension method once per route.');
+
+        $this->router->get('users', function () {
+            //
+        })->optionalExtensions(['.pdf'])->requiredExtensions(['.csv']);
+    }
+
+    public function testItCannotCanTheRequiredExtensionMethodOnTheSameRouteTwice()
+    {
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('You should only call the extension method once per route.');
+
+        $this->router->get('users', function () {
+            //
+        })->optionalExtensions(['.pdf'])->requiredExtensions(['.csv']);
+    }
+
+    public function testItCannotCanTheOptionalExtensionMethodOnTheSameRouteTwice()
+    {
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('You should only call the extension method once per route.');
+
+        $this->router->get('users', function () {
+            //
+        })->optionalExtensions(['.pdf'])->requiredExtensions(['.csv']);
     }
 
     /**

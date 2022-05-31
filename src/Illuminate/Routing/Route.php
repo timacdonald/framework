@@ -17,6 +17,7 @@ use Illuminate\Support\Traits\Macroable;
 use Laravel\SerializableClosure\SerializableClosure;
 use LogicException;
 use ReflectionFunction;
+use RuntimeException;
 use Symfony\Component\Routing\Route as SymfonyRoute;
 
 class Route
@@ -900,9 +901,10 @@ class Route
 
     public function requiredExtensions(array $extensions)
     {
+        $this->validateExtensionHasNotBeenSpecified();
+
         $regex = collect($extensions)
-            // TODO: preg quote
-            ->map(fn ($extension) => '(\\'.Str::start($extension, '.').')')
+            ->map(fn ($extension) => '('.preg_quote(Str::start($extension, '.')).')')
             ->join('|');
 
         $this->extensionRegex = "/({$regex}){1}$/";
@@ -914,13 +916,22 @@ class Route
 
     public function optionalExtensions(array $extensions)
     {
+        $this->validateExtensionHasNotBeenSpecified();
+
         $regex = collect($extensions)
-            ->map(fn ($extension) => '(\\'.Str::start($extension, '.').')')
+            ->map(fn ($extension) => '('.preg_quote(Str::start($extension, '.')).')')
             ->join('|');
 
         $this->extensionRegex = "/({$regex}){0,1}$/";
 
         return $this;
+    }
+
+    protected function validateExtensionHasNotBeenSpecified()
+    {
+        if ($this->extensionRegex !== null) {
+            throw new RuntimeException('You should only call the extension method once per route.');
+        }
     }
 
     /**
