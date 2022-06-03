@@ -500,6 +500,10 @@ trait ValidatesAttributes
             return false;
         }
 
+        if (count($parameters) === 2) {
+            $parameters = $this->escapeParameterSeparator($parameters);
+        }
+
         foreach ($parameters as $format) {
             $date = DateTime::createFromFormat('!'.$format, $value);
 
@@ -2159,5 +2163,26 @@ trait ValidatesAttributes
         if (is_numeric($this->getValue($attribute))) {
             $this->numericRules[] = $rule;
         }
+    }
+
+    /**
+     * Allow commas to be escaped in a set of parameters.
+     *
+     * @param  array  $parameters
+     * @return array
+     */
+    protected function escapeParameterSeparator($parameters)
+    {
+        $result = [];
+
+        while (count($parameters) > 1) {
+            if (str_ends_with($parameters[0], '\\') && ! str_ends_with($parameters[0], '\\\\')) {
+                $result[] = array_shift($parameters).','.array_shift($parameters);
+            } else {
+                $result = array_merge($result, [array_shift($parameters), array_shift($parameters)]);
+            }
+        }
+
+        return $result;
     }
 }

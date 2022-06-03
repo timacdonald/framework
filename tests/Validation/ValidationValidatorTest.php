@@ -4050,6 +4050,23 @@ class ValidationValidatorTest extends TestCase
         $this->assertTrue($v->passes());
     }
 
+    public function testItCanEscapeCommasInDateFormat()
+    {
+        $trans = $this->getIlluminateArrayTranslator();
+
+        $v = new Validator($trans, ['x' => '2022-06-03T06:42:34,260323+0000'], ['x' => 'date_format:Y-m-d\TH:i:s\,uO']);
+        $this->assertTrue($v->passes());
+
+        $v = new Validator($trans, ['x' => '2022-06-03T06:42:34,260323+0000'], ['x' => 'date_format:Y-m-d\TH:i:s\\,uO']);
+        $this->assertTrue($v->passes());
+
+        $v = new Validator($trans, ['x' => '2022-06-03T06:42:34,260323+0000'], ['x' => 'date_format:Y-m-d\TH:i:s\\\\,uO']);
+        $this->assertFalse($v->passes());
+
+        $v = new Validator($trans, ['x' => '2022-06-03T06:42:34\\'], ['x' => 'date_format:Y-m-d\TH:i:s\\\\,uO']);
+        $this->assertTrue($v->passes());
+    }
+
     public function testDateEquals()
     {
         date_default_timezone_set('UTC');
