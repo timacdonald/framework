@@ -153,6 +153,11 @@ class InvokableValidationRule implements RuleContract, DataAwareRule, ValidatorA
                 $this->destructor = $destructor;
             }
 
+            /**
+             * Handle the object's destruction.
+             *
+             * @return void
+             */
             public function __destruct()
             {
                 ($this->destructor)($this->toString());
