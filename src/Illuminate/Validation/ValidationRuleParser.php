@@ -3,6 +3,7 @@
 namespace Illuminate\Validation;
 
 use Closure;
+use Illuminate\Contracts\Validation\InvokableRule;
 use Illuminate\Contracts\Validation\Rule as RuleContract;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Str;
@@ -24,6 +25,13 @@ class ValidationRuleParser
      * @var array
      */
     public $implicitAttributes = [];
+
+    /**
+     * The validators translator.
+     *
+     * @var \Illuminate\Contracts\Translation\Translator
+     */
+    protected $translator;
 
     /**
      * Create a new validation rule parser.
@@ -112,6 +120,10 @@ class ValidationRuleParser
     {
         if ($rule instanceof Closure) {
             $rule = new ClosureValidationRule($rule);
+        }
+
+        if ($rule instanceof InvokableRule) {
+            $rule = new InvokableValidationRule($rule, $this->translator);
         }
 
         if (! is_object($rule) ||
@@ -334,5 +346,18 @@ class ValidationRuleParser
                 return $rule->passes($data) ? $rule->rules($data) : $rule->defaultRules($data);
             })->filter()->flatten(1)->values()->all()];
         })->all();
+    }
+
+    /**
+     * Set the Translator implementation.
+     *
+     * @param  \Illuminate\Contracts\Translation\Translator  $translator
+     * @return $this
+     */
+    public function setTranslator($translator)
+    {
+        $this->translator = $translator;
+
+        return $this;
     }
 }
