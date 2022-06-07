@@ -30,7 +30,7 @@ class PotentiallyTranslatedString implements Stringable
     protected $translator;
 
     /**
-     * Create a new Potentially Translated String.
+     * Create a new potentially translated string.
      *
      * @param  string  $string
      * @param \Illuminate\Contracts\Translation\Translator  $translator

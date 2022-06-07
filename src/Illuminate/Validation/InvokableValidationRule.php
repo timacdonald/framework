@@ -121,8 +121,7 @@ class InvokableValidationRule implements RuleContract, DataAwareRule, ValidatorA
 
     protected function potentiallyTranslatableString($message)
     {
-        return new class (
-            $message,
+        return new class( $message,
             $this->validator->getTranslator(),
             fn ($message) => $this->messages[] = $message
         ) extends PotentiallyTranslatedString {
