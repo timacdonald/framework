@@ -7227,7 +7227,6 @@ class ValidationValidatorTest extends TestCase
         $this->assertEquals($expectedResult, $validator->getMessageBag()->getMessages());
     }
 
-
     protected function getTranslator()
     {
         return m::mock(TranslatorContract::class);

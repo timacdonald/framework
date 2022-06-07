@@ -2,14 +2,12 @@
 
 namespace Illuminate\Translation;
 
-use Illuminate\Support\Str;
-use Illuminate\Support\Stringable as SupportStringable;
 use Stringable;
 
 class PotentiallyTranslatedString implements Stringable
 {
     /**
-     * The string that may be traslated.
+     * The string that may be translated.
      *
      * @var string
      */
@@ -18,7 +16,7 @@ class PotentiallyTranslatedString implements Stringable
     /**
      * The translated string.
      *
-     * @var string
+     * @var string|null
      */
     protected $translation;
 

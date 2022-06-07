@@ -8,8 +8,9 @@ use Illuminate\Contracts\Validation\ValidatorAwareRule;
 use Illuminate\Translation\ArrayLoader;
 use Illuminate\Translation\Translator;
 use Illuminate\Validation\Validator;
+use PHPUnit\Framework\TestCase;
 
-class InvokableRuleTest extends ValidationValidatorTest
+class ValidationInvokableRuleTest extends TestCase
 {
     public function testItCanPass()
     {
@@ -43,7 +44,7 @@ class InvokableRuleTest extends ValidationValidatorTest
         $this->assertSame([
             'foo' => [
                 "The foo attribute is not 'foo'. Got 'bar' instead.",
-            ]
+            ],
         ], $validator->messages()->messages());
     }
 
@@ -65,7 +66,7 @@ class InvokableRuleTest extends ValidationValidatorTest
             'foo' => [
                 "Error message 1.",
                 "Error message 2.",
-            ]
+            ],
         ], $validator->messages()->messages());
     }
 
@@ -86,7 +87,7 @@ class InvokableRuleTest extends ValidationValidatorTest
         $this->assertSame([
             'foo' => [
                 "Translated error message.",
-            ]
+            ],
         ], $validator->messages()->messages());
     }
 
@@ -142,6 +143,14 @@ class InvokableRuleTest extends ValidationValidatorTest
 
         $this->assertTrue($validator->passes());
         $this->assertSame($validator, $rule->validator);
+    }
+
+    private function getIlluminateArrayTranslator()
+    {
+        return new Translator(
+            new ArrayLoader(),
+            'en'
+        );
     }
 
     // TODO: implicit rules.
