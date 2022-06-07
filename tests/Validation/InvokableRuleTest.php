@@ -76,7 +76,7 @@ class InvokableRuleTest extends ValidationValidatorTest
         $rule = new class () implements InvokableRule {
             public function __invoke($attribute, $value, $fail)
             {
-                $fail('translated-error')->translate();
+                $fail('validation.translated-error')->translate();
             }
         };
 

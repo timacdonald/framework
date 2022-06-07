@@ -30,26 +30,16 @@ class PotentiallyTranslatedString implements Stringable
     protected $translator;
 
     /**
-     * The prefix for the translation key.
-     *
-     * @var null|string
-     */
-    protected $prefix;
-
-    /**
      * Create a new Potentially Translated String.
      *
      * @param  string  $string
      * @param \Illuminate\Contracts\Translation\Translator  $translator
-     * @param  null|string  $prefix
      */
-    public function __construct($string, $translator, $prefix = null)
+    public function __construct($string, $translator)
     {
         $this->string = $string;
 
         $this->translator = $translator;
-
-        $this->prefix = $prefix;
     }
 
     /**
@@ -59,7 +49,7 @@ class PotentiallyTranslatedString implements Stringable
      */
     public function translate()
     {
-        $this->translation = $this->translator->get($this->key());
+        $this->translation = $this->translator->get($this->string);
 
         return $this;
     }
@@ -92,15 +82,5 @@ class PotentiallyTranslatedString implements Stringable
     public function toString()
     {
         return (string) $this;
-    }
-
-    /**
-     * The translation key.
-     *
-     * @return string
-     */
-    protected function key()
-    {
-        return ($this->prefix === null ? '' : Str::finish($this->prefix, '.')).$this->string;
     }
 }
