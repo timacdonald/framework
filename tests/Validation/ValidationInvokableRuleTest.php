@@ -3,6 +3,7 @@
 namespace Illuminate\Tests\Validation;
 
 use Illuminate\Contracts\Validation\DataAwareRule;
+use Illuminate\Contracts\Validation\ImplicitRule;
 use Illuminate\Contracts\Validation\InvokableRule;
 use Illuminate\Contracts\Validation\ValidatorAwareRule;
 use Illuminate\Translation\ArrayLoader;
@@ -153,5 +154,59 @@ class ValidationInvokableRuleTest extends TestCase
         );
     }
 
-    // TODO: implicit rules.
+    public function testItCanBeExplicit()
+    {
+        $trans = $this->getIlluminateArrayTranslator();
+        $rule = new class () implements InvokableRule {
+            public $implicit = false;
+
+            public function __invoke($attribute, $value, $fail)
+            {
+                $fail('xxxx');
+            }
+        };
+
+        $validator = new Validator($trans, ['foo' => ''], ['foo' => $rule]);
+
+        $this->assertTrue($validator->passes());
+        $this->assertSame([], $validator->messages()->messages());
+    }
+
+    public function testItCanBeImplicit()
+    {
+        $trans = $this->getIlluminateArrayTranslator();
+        $rule = new class () implements InvokableRule {
+            public $implicit = true;
+
+            public function __invoke($attribute, $value, $fail)
+            {
+                $fail('xxxx');
+            }
+        };
+
+        $validator = new Validator($trans, ['foo' => ''], ['foo' => $rule]);
+
+        $this->assertFalse($validator->passes());
+        $this->assertSame([
+            'foo' => [
+                'xxxx',
+            ],
+        ], $validator->messages()->messages());
+    }
+
+    public function testItIsExplicitByDefault()
+    {
+        $trans = $this->getIlluminateArrayTranslator();
+        $rule = new class () implements InvokableRule {
+            public function __invoke($attribute, $value, $fail)
+            {
+                $fail('xxxx');
+            }
+        };
+
+        $validator = new Validator($trans, ['foo' => ''], ['foo' => $rule]);
+
+        $this->assertTrue($validator->passes());
+        $this->assertSame([], $validator->messages()->messages());
+    }
 }

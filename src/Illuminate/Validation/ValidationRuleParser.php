@@ -116,7 +116,7 @@ class ValidationRuleParser
         }
 
         if ($rule instanceof InvokableRule) {
-            $rule = new InvokableValidationRule($rule);
+            $rule = InvokableValidationRule::make($rule);
         }
 
         if (! is_object($rule) ||
