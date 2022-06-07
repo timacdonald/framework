@@ -3,7 +3,6 @@
 namespace Illuminate\Tests\Validation;
 
 use Illuminate\Contracts\Validation\DataAwareRule;
-use Illuminate\Contracts\Validation\ImplicitRule;
 use Illuminate\Contracts\Validation\InvokableRule;
 use Illuminate\Contracts\Validation\ValidatorAwareRule;
 use Illuminate\Translation\ArrayLoader;
@@ -146,14 +145,6 @@ class ValidationInvokableRuleTest extends TestCase
         $this->assertSame($validator, $rule->validator);
     }
 
-    private function getIlluminateArrayTranslator()
-    {
-        return new Translator(
-            new ArrayLoader(),
-            'en'
-        );
-    }
-
     public function testItCanBeExplicit()
     {
         $trans = $this->getIlluminateArrayTranslator();
@@ -208,5 +199,13 @@ class ValidationInvokableRuleTest extends TestCase
 
         $this->assertTrue($validator->passes());
         $this->assertSame([], $validator->messages()->messages());
+    }
+
+    private function getIlluminateArrayTranslator()
+    {
+        return new Translator(
+            new ArrayLoader(),
+            'en'
+        );
     }
 }
