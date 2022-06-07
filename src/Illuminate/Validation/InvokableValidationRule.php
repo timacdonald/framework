@@ -46,17 +46,6 @@ class InvokableValidationRule implements Rule, DataAwareRule, ValidatorAwareRule
     protected $data = [];
 
     /**
-     * Create a new explicit Invokable validation rule.
-     *
-     * @param  \Illuminate\Contracts\Validation\InvokableRule  $invokable
-     * @return void
-     */
-    public function __construct($invokable)
-    {
-        $this->invokable = $invokable;
-    }
-
-    /**
      * Create a new implicit or explicit Invokable validation rule.
      *
      * @param  \Illuminate\Contracts\Validation\InvokableRule  $invokable
@@ -71,6 +60,17 @@ class InvokableValidationRule implements Rule, DataAwareRule, ValidatorAwareRule
         }
 
         return new InvokableValidationRule($invokable);
+    }
+
+    /**
+     * Create a new explicit Invokable validation rule.
+     *
+     * @param  \Illuminate\Contracts\Validation\InvokableRule  $invokable
+     * @return void
+     */
+    protected function __construct($invokable)
+    {
+        $this->invokable = $invokable;
     }
 
     /**
