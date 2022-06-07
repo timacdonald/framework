@@ -17,13 +17,6 @@ class InvokableValidationRule implements RuleContract, DataAwareRule, ValidatorA
     protected $invokable;
 
     /**
-     * The validators translator.
-     *
-     * @var \Illuminate\Contracts\Translation\Translator
-     */
-    protected $translator;
-
-    /**
      * Indicates if the validation invokable failed.
      *
      * @var bool
@@ -55,14 +48,11 @@ class InvokableValidationRule implements RuleContract, DataAwareRule, ValidatorA
      * Create a new Invokable validation rule.
      *
      * @param  \Illuminate\Contracts\Validation\InvokableRule  $invokable
-     * @param  \Illuminate\Contracts\Translation\Translator
      * @return void
      */
-    public function __construct($invokable, $translator)
+    public function __construct($invokable)
     {
         $this->invokable = $invokable;
-
-        $this->translator = $translator;
     }
 
     /**
@@ -132,7 +122,8 @@ class InvokableValidationRule implements RuleContract, DataAwareRule, ValidatorA
     protected function potentiallyTranslatableString($message)
     {
         return new class (
-            $message, $this->translator,
+            $message,
+            $this->validator->getTranslator(),
             fn ($message) => $this->messages[] = $message
         ) extends PotentiallyTranslatedString {
             public function __construct($message, $translator, $addMessage)

@@ -27,13 +27,6 @@ class ValidationRuleParser
     public $implicitAttributes = [];
 
     /**
-     * The validators translator.
-     *
-     * @var \Illuminate\Contracts\Translation\Translator
-     */
-    protected $translator;
-
-    /**
      * Create a new validation rule parser.
      *
      * @param  array  $data
@@ -123,7 +116,7 @@ class ValidationRuleParser
         }
 
         if ($rule instanceof InvokableRule) {
-            $rule = new InvokableValidationRule($rule, $this->translator);
+            $rule = new InvokableValidationRule($rule);
         }
 
         if (! is_object($rule) ||
@@ -346,18 +339,5 @@ class ValidationRuleParser
                 return $rule->passes($data) ? $rule->rules($data) : $rule->defaultRules($data);
             })->filter()->flatten(1)->values()->all()];
         })->all();
-    }
-
-    /**
-     * Set the Translator implementation.
-     *
-     * @param  \Illuminate\Contracts\Translation\Translator  $translator
-     * @return $this
-     */
-    public function setTranslator($translator)
-    {
-        $this->translator = $translator;
-
-        return $this;
     }
 }
