@@ -87,6 +87,7 @@ class InvokableValidationRule implements RuleContract, DataAwareRule, ValidatorA
         $this->invokable->__invoke($attribute, $value, function ($message) {
             $this->failed = true;
 
+            return $this->potentiallyTranslatableString($message);
         });
 
         return ! $this->failed;
@@ -128,21 +129,21 @@ class InvokableValidationRule implements RuleContract, DataAwareRule, ValidatorA
         return $this;
     }
 
-    protected function potentiallyTranslatableString()
+    protected function potentiallyTranslatableString($message)
     {
         return new class (
-            $message,
-            $this->translator,
-            fn ($message) => $this->messages[] = $message
+            $message, $this->translator,
+            'validation', fn ($message) => $this->messages[] = $message
         ) extends PotentiallyTranslatedString {
-            public function __construct($message, $translator, $addMessage)
+            public function __construct($message, $translator, $prefix, $addMessage)
             {
-                parent::__construct($message, $translator);
+                parent::__construct($message, $translator, $prefix);
 
                 $this->addMessage = $addMessage;
             }
 
-            public function __destruct() {
+            public function __destruct()
+            {
                 ($this->addMessage)($this->toString());
             }
         };
