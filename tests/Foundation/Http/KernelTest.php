@@ -2,10 +2,14 @@
 
 namespace Illuminate\Tests\Foundation\Http;
 
+use Carbon\CarbonInterval;
 use Illuminate\Events\Dispatcher;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Http\Kernel;
+use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Routing\Router;
+use Illuminate\Support\Carbon;
 use PHPUnit\Framework\TestCase;
 
 class KernelTest extends TestCase
