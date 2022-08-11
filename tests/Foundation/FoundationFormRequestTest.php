@@ -149,6 +149,37 @@ class FoundationFormRequestTest extends TestCase
         $this->assertSame('bar', $request->validated('nested.foo'));
     }
 
+    public function testRulesAreNotFilteredOutWhenNotPrecognitive()
+    {
+        $payload = ['group' => 'foo', 'individual' => 10];
+
+        $request = $this->createRequest($payload, FoundationTestPrecognitiveRequest::class);
+
+        try {
+            $request->validateResolved();
+            $this->fail();
+        } catch (ValidationException $e) {
+            $this->assertArrayHasKey('group', $e->errors());
+            $this->assertArrayHasKey('individual', $e->errors());
+        }
+    }
+
+    public function testRulesAreFilteredOutWhenPrecognitive()
+    {
+        $payload = ['group' => 'foo', 'individual' => 10];
+        $request = $this->createRequest($payload, FoundationTestPrecognitiveRequest::class)->setPrecognitive(true);
+        $request->validateResolved();
+
+        $payload = ['group' => 'foo', 'individual' => 'foo'];
+        $request = $this->createRequest($payload, FoundationTestPrecognitiveRequest::class)->setPrecognitive(true);
+        try {
+            $request->validateResolved();
+            $this->fail();
+        } catch (ValidationException $e) {
+            $this->assertArrayHasKey('individual', $e->errors());
+        }
+    }
+
     /**
      * Catch the given exception thrown from the executor, and return it.
      *
@@ -375,5 +406,19 @@ class FoundationTestFormRequestPassesWithResponseStub extends FormRequest
     public function authorize()
     {
         return Response::allow('baz');
+    }
+}
+
+class FoundationTestPrecognitiveRequest extends FormRequest
+{
+    public function rules()
+    {
+        return [
+            'group' => $this->unlessPrecognitive('integer'),
+            'individual' => [
+                'integer',
+                $this->unlessPrecognitive('max:5'),
+            ],
+        ];
     }
 }
