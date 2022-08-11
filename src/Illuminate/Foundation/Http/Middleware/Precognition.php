@@ -22,6 +22,7 @@ class Precognition
     {
         $this->container = $container;
     }
+
     /**
      * Handle an incoming request.
      *
@@ -41,5 +42,16 @@ class Precognition
         $this->container->instance(ControllerDispatcher::class, fn ($app) => new PrecognitiveControllerDispatcher($app));
 
         return $next($request)->header('Precognition', '1');
+    }
+
+    /**
+     * Set the precognitive response resolver.
+     *
+     * @param  \Closure  $resolver
+     * @return void
+     */
+    public static function useResponseResolver($resolver)
+    {
+        app()->bind('precognitive.response', $resolver);
     }
 }
