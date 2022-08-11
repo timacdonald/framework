@@ -10,6 +10,8 @@ use Illuminate\Contracts\Validation\ValidatesWhenResolved;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Redirector;
+use Illuminate\Support\Collection;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidatesWhenResolvedTrait;
 use Illuminate\Validation\ValidationException;
 
@@ -122,7 +124,13 @@ class FormRequest extends Request implements ValidatesWhenResolved
      */
     protected function resolveRules()
     {
-        return $this->container->call([$this, 'rules']);
+        if ($this->container['precognition'] !== true && $this->header('Precognition-Validate-Only') === null) {
+            return $this->container->call([$this, 'rules']);
+        }
+
+        return Collection::make($this->container->call([$this, 'rules']))
+            ->only(explode(',', $this->header('Precognition-Validate-Only')))
+            ->all();
     }
 
     /**
@@ -243,6 +251,17 @@ class FormRequest extends Request implements ValidatesWhenResolved
     public function attributes()
     {
         return [];
+    }
+
+    /**
+     * Conditionally remove validation rules for precognition.
+     *
+     * @param  mixed  $rule
+     * @return \Illuminate\Validation\ConditionalRules
+     */
+    protected function withoutPrecognition($rule)
+    {
+        return Rule::when($this->container['precognition'] !== true, $rule);
     }
 
     /**
