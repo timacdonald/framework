@@ -26,6 +26,6 @@ class PrecognitiveControllerDispatcher extends ControllerDispatcher
             $response = $controller->{$predictiveMethod}(...array_values($arguments));
         }
 
-        return $response ?? $this->container['precognition.response'];
+        return $response ?? $this->container['precognitive.response'];
     }
 }

@@ -76,6 +76,13 @@ class FormRequest extends Request implements ValidatesWhenResolved
     protected $validator;
 
     /**
+     * Indicates that the request is precognitive.
+     *
+     * @var bool
+     */
+    protected $precognitive = false;
+
+    /**
      * Get the validator instance for the request.
      *
      * @return \Illuminate\Contracts\Validation\Validator
@@ -124,7 +131,7 @@ class FormRequest extends Request implements ValidatesWhenResolved
      */
     protected function resolveRules()
     {
-        if ($this->container['precognition'] !== true && $this->header('Precognition-Validate-Only') === null) {
+        if (! $this->precognitive) {
             return $this->container->call([$this, 'rules']);
         }
 
@@ -254,14 +261,14 @@ class FormRequest extends Request implements ValidatesWhenResolved
     }
 
     /**
-     * Conditionally remove validation rules for precognition.
+     * Conditionally remove validation rules for precognitive requests.
      *
      * @param  mixed  $rule
      * @return \Illuminate\Validation\ConditionalRules
      */
-    protected function withoutPrecognition($rule)
+    protected function unlessPrecognitive($rule)
     {
-        return Rule::when($this->container['precognition'] !== true, $rule);
+        return Rule::when(! $this->precognitive, $rule);
     }
 
     /**
@@ -299,6 +306,19 @@ class FormRequest extends Request implements ValidatesWhenResolved
     public function setContainer(Container $container)
     {
         $this->container = $container;
+
+        return $this;
+    }
+
+    /**
+     * Set the precognitive state.
+     *
+     * @param  bool  $precognitive
+     * @return $this
+     */
+    public function setPrecognitive($precognitive)
+    {
+        $this->precognitive = $precognitive;
 
         return $this;
     }

@@ -15,6 +15,6 @@ class PrecognitiveCallableDispatcher extends CallableDispatcher
     {
         $this->resolveArguments($route, $callable);
 
-        return $this->container['precongnition.response'];
+        return $this->container['precognitive.response'];
     }
 }

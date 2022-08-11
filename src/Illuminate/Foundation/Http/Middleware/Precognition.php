@@ -31,9 +31,9 @@ class Precognition
      */
     public function handle($request, Closure $next)
     {
-        $this->container->instance('precognition', $preconitiveGlance = $request->isAttemptingPrecognitiveGlance());
+        $this->container->instance('precognitive', $precognitive = $request->isAttemptingPrecognitiveGlance());
 
-        if (! $preconitiveGlance) {
+        if (! $precognitive) {
             return $next($request);
         }
 

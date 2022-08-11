@@ -33,7 +33,7 @@ class RoutingServiceProvider extends ServiceProvider
         $this->registerResponseFactory();
         $this->registerCallableDispatcher();
         $this->registerControllerDispatcher();
-        $this->registerPrecognitionResponse();
+        $this->registerPrecognitiveResponse();
     }
 
     /**
@@ -202,13 +202,13 @@ class RoutingServiceProvider extends ServiceProvider
     }
 
     /**
-     * Register the precognition response.
+     * Register the precognitive response.
      *
      * @return void
      */
-    protected function registerPrecognitionResponse()
+    protected function registerPrecognitiveResponse()
     {
-        $this->app->bind('precongnition.response', function ($app) {
+        $this->app->bind('precognitive.response', function ($app) {
             return $app[ResponseFactoryContract::class]->make('', Response::HTTP_NO_CONTENT);
         });
     }

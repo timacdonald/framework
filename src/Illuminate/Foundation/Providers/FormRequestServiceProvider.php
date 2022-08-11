@@ -33,7 +33,9 @@ class FormRequestServiceProvider extends ServiceProvider
         $this->app->resolving(FormRequest::class, function ($request, $app) {
             $request = FormRequest::createFrom($app['request'], $request);
 
-            $request->setContainer($app)->setRedirector($app->make(Redirector::class));
+            $request->setContainer($app)
+                ->setRedirector($app->make(Redirector::class))
+                ->setPrecognitive($app->bound('precognitive') && $app['precognitive']);
         });
     }
 }
