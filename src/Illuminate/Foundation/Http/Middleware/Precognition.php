@@ -31,8 +31,10 @@ class Precognition
      */
     public function handle($request, Closure $next)
     {
-        if ($request->isNotAttemptingPrecognitiveGlance()) {
-            return $next($response);
+        $this->container->instance('precognition', $preconitiveGlance = $request->isAttemptingPrecognitiveGlance());
+
+        if (! $preconitiveGlance) {
+            return $next($request);
         }
 
         $this->container->instance(CallableDispatcher::class, fn ($app) => new PrecognitiveCallableDispatcher($app));
