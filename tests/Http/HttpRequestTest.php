@@ -1422,4 +1422,19 @@ class HttpRequestTest extends TestCase
         $request->setLaravelSession($session);
         $request->flashExcept(['email']);
     }
+
+    public function testPrecognitiveGlance()
+    {
+        $request = Request::create('/', 'GET', [], [], [], ['HTTP_PRECOGNITION' => '1']);
+        $this->assertTrue($request->isAttemptingPrecognitiveGlance());
+        $this->assertFalse($request->isNotAttemptingPrecognitiveGlance());
+
+        $request = Request::create('/', 'GET', [], [], [], ['HTTP_PRECOGNITION' => '']);
+        $this->assertFalse($request->isAttemptingPrecognitiveGlance());
+        $this->assertTrue($request->isNotAttemptingPrecognitiveGlance());
+
+        $request = Request::create('/', 'GET', [], [], [], []);
+        $this->assertFalse($request->isAttemptingPrecognitiveGlance());
+        $this->assertTrue($request->isNotAttemptingPrecognitiveGlance());
+    }
 }
