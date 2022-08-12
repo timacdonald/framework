@@ -15,10 +15,10 @@ class PrecognitionTest extends TestCase
             throw new \Exception('xxxx');
         })->middleware(Precognition::class);
 
-        $response = $this->get('test-route', ['Precognition' => '1']);
+        $response = $this->get('test-route', ['Precognition' => 'true']);
 
         $response->assertNoContent();
-        $response->assertHeader('Precognition', '1');
+        $response->assertHeader('Precognition', 'true');
     }
 
     public function testItProvidesSensibleFinalResponseViaController()
@@ -26,35 +26,10 @@ class PrecognitionTest extends TestCase
         Route::get('test-route', [PrecognitionTestController::class, 'show'])
             ->middleware(Precognition::class);
 
-        $response = $this->get('test-route', ['Precognition' => '1']);
+        $response = $this->get('test-route', ['Precognition' => 'true']);
 
         $response->assertNoContent();
-        $response->assertHeader('Precognition', '1');
-    }
-
-    public function testItCanControlTheFinalResponseViaClosure()
-    {
-        Route::get('test-route', function () {
-            throw new \Exception('xxxx');
-        })->middleware(Precognition::class);
-
-        Precognition::useResponseResolver(fn () => '🔮');
-        $response = $this->get('test-route', ['Precognition' => '1']);
-
-        $this->assertSame('🔮', $response->content());
-        $response->assertHeader('Precognition', '1');
-    }
-
-    public function testItCanControlTheFinalResponseViaController()
-    {
-        Route::get('test-route', [PrecognitionTestController::class, 'show'])
-            ->middleware(Precognition::class);
-
-        Precognition::useResponseResolver(fn () => '🔮');
-        $response = $this->get('test-route', ['Precognition' => '1']);
-
-        $this->assertSame('🔮', $response->content());
-        $response->assertHeader('Precognition', '1');
+        $response->assertHeader('Precognition', 'true');
     }
 
     public function testItCanImplementMagicMethodOnControllerToProvideResponse()
@@ -62,24 +37,11 @@ class PrecognitionTest extends TestCase
         Route::get('test-route', [PrecognitionTestController::class, 'update'])
             ->middleware(Precognition::class);
 
-        $response = $this->get('test-route', ['Precognition' => '1']);
+        $response = $this->get('test-route', ['Precognition' => 'true']);
 
         $response->assertStatus(409);
         $this->assertSame('Conflict', $response->content());
-        $response->assertHeader('Precognition', '1');
-    }
-
-    public function testControllerPredictionOverrulesFinalResponse()
-    {
-        Route::get('test-route', [PrecognitionTestController::class, 'update'])
-            ->middleware(Precognition::class);
-        Precognition::useResponseResolver(fn () => response('ok'));
-
-        $response = $this->get('test-route', ['Precognition' => '1']);
-
-        $response->assertStatus(409);
-        $this->assertSame('Conflict', $response->content());
-        $response->assertHeader('Precognition', '1');
+        $response->assertHeader('Precognition', 'true');
     }
 
     public function testItBindsPrecognitiveStateToContainer()
@@ -88,12 +50,23 @@ class PrecognitionTest extends TestCase
             throw new \Exception('xxxx');
         })->middleware(Precognition::class);
 
-        $this->assertFalse($this->app->bound('precognitive'));
+        $this->assertFalse($this->app['precognitive']);
 
-        $response = $this->get('test-route', ['Precognition' => '1']);
+        $this->get('test-route', ['Precognition' => 'true']);
 
-        $this->assertTrue($this->app->bound('precognitive'));
         $this->assertTrue($this->app['precognitive']);
+    }
+
+    public function testItBindRequestMacro()
+    {
+        Route::get('test-route', [PrecognitionTestController::class, 'checkPrecogMacro'])
+            ->middleware(Precognition::class);
+
+        $responses = [];
+        $responses[] = $this->get('test-route')->content();
+        $responses[] = $this->get('test-route', ['Precognition' => 'true'])->content();
+
+        $this->assertSame(['no', 'yes'], $responses);
     }
 
     public function testBeforeMiddleware()
@@ -126,5 +99,15 @@ class PrecognitionTestController
     public function show()
     {
         throw new \Exception('xxxx');
+    }
+
+    public function predictCheckPrecogMacro()
+    {
+        return request()->precognitive() ? 'yes' : 'no';
+    }
+
+    public function checkPrecogMacro()
+    {
+        return request()->precognitive() ? 'yes' : 'no';
     }
 }
