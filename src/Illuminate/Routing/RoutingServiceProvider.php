@@ -183,9 +183,7 @@ class RoutingServiceProvider extends ServiceProvider
      */
     protected function registerCallableDispatcher()
     {
-        $this->app->singleton(CallableDispatcherContract::class, function ($app) {
-            return new CallableDispatcher($app);
-        });
+        $this->app->singleton(CallableDispatcherContract::class, fn ($app) => new CallableDispatcher($app));
     }
 
     /**
