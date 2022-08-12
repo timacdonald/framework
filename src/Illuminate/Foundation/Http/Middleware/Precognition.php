@@ -14,13 +14,6 @@ use Illuminate\Foundation\Routing\PrecognitiveControllerDispatcher;
 class Precognition
 {
     /**
-     * The incoming and outgoing header.
-     *
-     * @var string
-     */
-    protected $header = 'Precognition';
-
-    /**
      * The container instance.
      *
      * @var \Illuminate\Container\Container
