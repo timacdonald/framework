@@ -1,6 +1,6 @@
 <?php
 
-namespace Illuminate\Routing;
+namespace Illuminate\Foundation\Routing;
 
 class PrecognitiveCallableDispatcher extends CallableDispatcher
 {
