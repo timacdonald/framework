@@ -125,6 +125,32 @@ class PrecognitionTest extends TestCase
         ]);
     }
 
+    public function testClientCanSpecifyInputsToValidate()
+    {
+        Route::post('test-route', function (PrecognitionTestRequest $request) {
+            //
+        })->middleware([Precognition::class]);
+
+        $response = $this->postJson('test-route', [
+            'always' => 'foo',
+            'sometimes_1' => 'foo',
+            'sometimes_2' => 'foo',
+            'whenNotPrecognitive' => 'foo',
+        ], [
+            'Precognition' => 'true',
+            'Precognition-Validate-Only' => 'sometimes_1,sometimes_2',
+        ]);
+
+        $response->assertJsonPath('errors', [
+            'sometimes_1' => [
+                'The sometimes 1 must be an integer.'
+            ],
+            'sometimes_2' => [
+                'The sometimes 2 must be an integer.'
+            ]
+        ]);
+    }
+
     public function testResponsesGeneratedViaExceptionBasedFlowControlHavePreparedHeaders()
     {
         $this->markTestIncomplete('wip');
@@ -196,6 +222,8 @@ class PrecognitionTestRequest extends FormRequest
         return [
             'always' => 'integer',
             'whenNotPrecognitive' => $this->whenNotPrecognitive('integer'),
+            'sometimes_1' => 'integer',
+            'sometimes_2' => 'integer',
         ];
     }
 }
