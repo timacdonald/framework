@@ -38,9 +38,9 @@ class Precognition
             return $next($request);
         }
 
-        $this->setupPrecognitiveBindings($request);
+        $this->prepareForPrecognition($request);
 
-        return $this->prepareResponse($next($request));
+        return $this->handleResponse($next($request));
     }
 
     /**
@@ -55,44 +55,44 @@ class Precognition
     }
 
     /**
-     * Setup the bindings for a precognitive request.
+     * Prepare to handle a precognitive request.
      *
      * @param  \Illuminate\Http\Request  $request
      * @retur void
      */
-    protected function setupPrecognitiveBindings($request)
+    protected function prepareForPrecognition($request)
     {
         $this->container->instance('precognitive', true);
 
         $this->container->singleton(
             CallableDispatcher::class,
-            fn ($app) => new PrecognitiveCallableDispatcher($app, fn () => $this->finalResponse($request))
+            fn ($app) => new PrecognitiveCallableDispatcher($app, fn () => $this->onEmptyResponse($request))
         );
 
         $this->container->singleton(
             ControllerDispatcher::class,
-            fn ($app) => new PrecognitiveControllerDispatcher($app, fn () => $this->finalResponse($request))
+            fn ($app) => new PrecognitiveControllerDispatcher($app, fn () => $this->onEmptyResponse($request))
         );
     }
 
     /**
-     * Create the final response for a precognitive request.
+     * The response to return if no other response is provided during precognition.
      *
      * @param  \Illuminate\Http\Request  $request
      * @return \Illuminate\Http\Response
      */
-    protected function finalResponse($request)
+    protected function onEmptyResponse($request)
     {
         return $this->container[ResponseFactory::class]->make('', Response::HTTP_NO_CONTENT);
     }
 
     /**
-     * Prepare the outgoing response.
+     * Prepare the outgoing precognitive response.
      *
      * @param  \Illuminate\Http\Response  $response
      * @return \Illuminate\Http\Response
      */
-    protected function prepareResponse($response)
+    protected function handleResponse($response)
     {
         return $response->withHeaders([
             'Precognition' => 'true',

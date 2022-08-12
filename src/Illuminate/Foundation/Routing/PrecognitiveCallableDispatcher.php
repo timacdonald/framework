@@ -3,27 +3,28 @@
 namespace Illuminate\Foundation\Routing;
 
 use Illuminate\Routing\CallableDispatcher;
+use Illuminate\Routing\Route;
 
 class PrecognitiveCallableDispatcher extends CallableDispatcher
 {
     /**
-     * The final response resolver.
+     * The empty response resolver.
      *
      * @var callable
      */
-    protected $finalResponseResolver;
+    protected $emptyResponseResolver;
 
     /**
      * Create a new precognitive controller dispatcher instance.
      *
      * @param  \Illuminate\Container\Container  $container
-     * @param  callable  $finalResponseResolver
+     * @param  callable  $emptyResponseResolver
      */
-    public function __construct(Container $container, $finalResponseResolver)
+    public function __construct(Container $container, $emptyResponseResolver)
     {
         parent::__construct($container);
 
-        $this->finalResponseResolver = $finalResponseResolver;
+        $this->emptyResponseResolver = $emptyResponseResolver;
     }
 
     /**
@@ -37,6 +38,6 @@ class PrecognitiveCallableDispatcher extends CallableDispatcher
     {
         $this->resolveArguments($route, $callable);
 
-        return ($this->finalResponseResolver)($route, $callable);
+        return ($this->emptyResponseResolver)($route, $callable);
     }
 }
