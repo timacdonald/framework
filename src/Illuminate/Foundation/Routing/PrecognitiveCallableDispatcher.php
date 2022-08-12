@@ -2,8 +2,30 @@
 
 namespace Illuminate\Foundation\Routing;
 
+use Illuminate\Routing\CallableDispatcher;
+
 class PrecognitiveCallableDispatcher extends CallableDispatcher
 {
+    /**
+     * The final response resolver.
+     *
+     * @var callable
+     */
+    protected $finalResponseResolver;
+
+    /**
+     * Create a new precognitive controller dispatcher instance.
+     *
+     * @param  \Illuminate\Container\Container  $container
+     * @param  callable  $finalResponseResolver
+     */
+    public function __construct(Container $container, $finalResponseResolver)
+    {
+        parent::__construct($container);
+
+        $this->finalResponseResolver = $finalResponseResolver;
+    }
+
     /**
      * Dispatch a request to a given callable.
      *
@@ -15,6 +37,6 @@ class PrecognitiveCallableDispatcher extends CallableDispatcher
     {
         $this->resolveArguments($route, $callable);
 
-        return $this->container['precognitive.response'];
+        return ($this->finalResponseResolver)($route, $callable);
     }
 }
