@@ -125,27 +125,17 @@ class PrecognitionTest extends TestCase
         ]);
     }
 
-    // public function testRulesAreFilteredOutWhenPrecognitive()
-    // {
-    //     $payload = ['group' => 'foo', 'individual' => 10];
-    //     $request = $this->createRequest($payload, PrecognitionTestRequest::class)->setPrecognitive(true);
-    //     $request->validateResolved();
-
-    //     $payload = ['group' => 'foo', 'individual' => 'foo'];
-    //     $request = $this->createRequest($payload, ::class)->setPrecognitive(true);
-    //     try {
-    //         $request->validateResolved();
-    //         $this->fail();
-    //     } catch (ValidationException $e) {
-    //         $this->assertArrayHasKey('individual', $e->errors());
-    //     }
-    // }
+    public function testResponsesGeneratedViaExceptionBasedFlowControlHavePreparedHeaders()
+    {
+        $this->markTestIncomplete('wip');
+    }
 
     public function testBeforeMiddleware()
     {
         // what happens when they return a response
         // what happens when they throw an exception
         // can they detect that precognition is active?
+        $this->markTestIncomplete('wip');
     }
 
     public function testAfterMiddleware()
@@ -153,6 +143,7 @@ class PrecognitionTest extends TestCase
         // what happens when they return a response
         // what happens when they throw an exception
         // can they detect that precognition is active?
+        $this->markTestIncomplete('wip');
     }
 }
 
@@ -205,11 +196,6 @@ class PrecognitionTestRequest extends FormRequest
         return [
             'always' => 'integer',
             'whenNotPrecognitive' => $this->whenNotPrecognitive('integer'),
-            'group' => $this->whenNotPrecognitive('integer'),
-            'individual' => [
-                'integer',
-                $this->whenNotPrecognitive('max:5'),
-            ],
         ];
     }
 }
