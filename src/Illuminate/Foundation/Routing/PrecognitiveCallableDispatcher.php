@@ -36,8 +36,8 @@ class PrecognitiveCallableDispatcher extends CallableDispatcher
      */
     public function dispatch(Route $route, $callable)
     {
-        $this->resolveArguments($route, $callable);
+        $arguments = $this->resolveArguments($route, $callable);
 
-        return ($this->emptyResponseResolver)($route, $callable);
+        return ($this->emptyResponseResolver)($route, $callable, $arguments);
     }
 }

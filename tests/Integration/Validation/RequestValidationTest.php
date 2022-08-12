@@ -2,9 +2,7 @@
 
 namespace Illuminate\Tests\Integration\Validation;
 
-use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Route;
 use Illuminate\Validation\ValidationException;
 use Orchestra\Testbench\TestCase;
 
