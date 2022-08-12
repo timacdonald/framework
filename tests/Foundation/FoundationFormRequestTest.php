@@ -414,10 +414,10 @@ class FoundationTestPrecognitiveRequest extends FormRequest
     public function rules()
     {
         return [
-            'group' => $this->unlessPrecognitive('integer'),
+            'group' => $this->whenNotPrecognitive('integer'),
             'individual' => [
                 'integer',
-                $this->unlessPrecognitive('max:5'),
+                $this->whenNotPrecognitive('max:5'),
             ],
         ];
     }
