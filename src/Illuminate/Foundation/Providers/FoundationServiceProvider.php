@@ -148,6 +148,11 @@ class FoundationServiceProvider extends AggregateServiceProvider
         );
     }
 
+    /**
+     * Register precognition features.
+     *
+     * @return void
+     */
     protected function registerPrecognition()
     {
         $this->app->instance('precognitive', false);
