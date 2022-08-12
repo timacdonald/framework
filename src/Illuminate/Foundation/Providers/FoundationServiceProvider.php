@@ -61,6 +61,7 @@ class FoundationServiceProvider extends AggregateServiceProvider
         $this->registerRequestSignatureValidation();
         $this->registerExceptionTracking();
         $this->registerMaintenanceModeManager();
+        $this->registerPrecognition();
     }
 
     /**
@@ -144,5 +145,16 @@ class FoundationServiceProvider extends AggregateServiceProvider
             MaintenanceModeContract::class,
             fn () => $this->app->make(MaintenanceModeManager::class)->driver()
         );
+    }
+
+    protected function registerPrecognition()
+    {
+        $this->app->instance('precognitive', false);
+
+        $this->app->bind('precognitive.response', function ($app) {
+            return $app[ResponseFactoryContract::class]->make('', Response::HTTP_NO_CONTENT);
+        });
+
+        Request::macro('precognitive', fn () => app('precognitive'));
     }
 }
