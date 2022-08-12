@@ -38,8 +38,8 @@ class Precognition
             return $next($request);
         }
 
-        $this->container->instance(CallableDispatcher::class, fn ($app) => new PrecognitiveCallableDispatcher($app));
-        $this->container->instance(ControllerDispatcher::class, fn ($app) => new PrecognitiveControllerDispatcher($app));
+        $this->container->singleton(CallableDispatcher::class, fn ($app) => new PrecognitiveCallableDispatcher($app));
+        $this->container->singleton(ControllerDispatcher::class, fn ($app) => new PrecognitiveControllerDispatcher($app));
 
         return $next($request)->header('Precognition', '1');
     }
