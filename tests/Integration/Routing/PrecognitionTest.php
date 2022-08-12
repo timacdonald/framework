@@ -2,6 +2,7 @@
 
 namespace Illuminate\Tests\Integration\Routing;
 
+use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Foundation\Http\Middleware\Precognition;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -10,7 +11,7 @@ use Orchestra\Testbench\TestCase;
 
 class PrecognitionTest extends TestCase
 {
-    public function testItProvidesSensibleEmptyResponseViaClosure()
+    public function testItProvidesSensibleEmptyResponseViaClosureRoutes()
     {
         Route::get('test-route', function () {
             throw new \Exception('xxxx');
@@ -23,7 +24,7 @@ class PrecognitionTest extends TestCase
         $response->assertHeader('Vary', 'Precognition');
     }
 
-    public function testItProvidesSensibleEmptyResponseViaController()
+    public function testItProvidesSensibleEmptyResponseViaControllerRoutes()
     {
         Route::get('test-route', [PrecognitionTestController::class, 'show'])
             ->middleware(Precognition::class);
@@ -59,7 +60,7 @@ class PrecognitionTest extends TestCase
         $this->assertTrue($this->app['precognitive']);
     }
 
-    public function testItBindRequestMacro()
+    public function testItBindsRequestMacro()
     {
         Route::get('test-route', [PrecognitionTestController::class, 'checkPrecogMacro'])
             ->middleware(Precognition::class);
@@ -85,36 +86,60 @@ class PrecognitionTest extends TestCase
         ]);
     }
 
-    public function testRulesAreNotFilteredOutWhenNotPrecognitive()
+    public function testItCanSpecifyRulesThatShouldNotBeRunWhenPrecognitive()
     {
-        $payload = ['group' => 'foo', 'individual' => 10];
+        Route::post('test-route', function (PrecognitionTestRequest $request) {
+            //
+        })->middleware([Precognition::class]);
 
-        $request = $this->createRequest($payload, FoundationTestPrecognitiveRequest::class);
+        $response = $this->postJson('test-route', [
+            'always' => 'foo',
+            'whenNotPrecognitive' => 'foo',
+        ], ['Precognition' => 'true']);
 
-        try {
-            $request->validateResolved();
-            $this->fail();
-        } catch (ValidationException $e) {
-            $this->assertArrayHasKey('group', $e->errors());
-            $this->assertArrayHasKey('individual', $e->errors());
-        }
+        $response->assertJsonPath('errors', [
+            'always' => [
+                'The always must be an integer.'
+            ]
+        ]);
     }
 
-    public function testRulesAreFilteredOutWhenPrecognitive()
+    public function testItCanExcludedRulesRunAsExpectedWithoutPrecognition()
     {
-        $payload = ['group' => 'foo', 'individual' => 10];
-        $request = $this->createRequest($payload, FoundationTestPrecognitiveRequest::class)->setPrecognitive(true);
-        $request->validateResolved();
+        Route::post('test-route', function (PrecognitionTestRequest $request) {
+            //
+        })->middleware([Precognition::class]);
 
-        $payload = ['group' => 'foo', 'individual' => 'foo'];
-        $request = $this->createRequest($payload, FoundationTestPrecognitiveRequest::class)->setPrecognitive(true);
-        try {
-            $request->validateResolved();
-            $this->fail();
-        } catch (ValidationException $e) {
-            $this->assertArrayHasKey('individual', $e->errors());
-        }
+        $response = $this->postJson('test-route', [
+            'always' => 'foo',
+            'whenNotPrecognitive' => 'foo',
+        ]);
+
+        $response->assertJsonPath('errors', [
+            'always' => [
+                'The always must be an integer.'
+            ],
+            'whenNotPrecognitive' => [
+                'The when not precognitive must be an integer.'
+            ]
+        ]);
     }
+
+    // public function testRulesAreFilteredOutWhenPrecognitive()
+    // {
+    //     $payload = ['group' => 'foo', 'individual' => 10];
+    //     $request = $this->createRequest($payload, PrecognitionTestRequest::class)->setPrecognitive(true);
+    //     $request->validateResolved();
+
+    //     $payload = ['group' => 'foo', 'individual' => 'foo'];
+    //     $request = $this->createRequest($payload, ::class)->setPrecognitive(true);
+    //     try {
+    //         $request->validateResolved();
+    //         $this->fail();
+    //     } catch (ValidationException $e) {
+    //         $this->assertArrayHasKey('individual', $e->errors());
+    //     }
+    // }
 
     public function testBeforeMiddleware()
     {
@@ -178,6 +203,8 @@ class PrecognitionTestRequest extends FormRequest
     public function rules()
     {
         return [
+            'always' => 'integer',
+            'whenNotPrecognitive' => $this->whenNotPrecognitive('integer'),
             'group' => $this->whenNotPrecognitive('integer'),
             'individual' => [
                 'integer',
@@ -185,5 +212,4 @@ class PrecognitionTestRequest extends FormRequest
             ],
         ];
     }
-
 }
