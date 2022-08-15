@@ -25,8 +25,6 @@ trait PredictsOutcomes
      * Run the prediction and return any passed payload.
      *
      * @return mixed
-     *
-     * TODO: Closure support.
      */
     protected function resolvePrediction($callable = null)
     {
