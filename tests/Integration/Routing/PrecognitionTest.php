@@ -196,7 +196,7 @@ class PrecognitionTest extends TestCase
 
 class PrecognitionTestController
 {
-    public function predictUpdate()
+    public function updatePrediction()
     {
         return response('Conflict', Response::HTTP_CONFLICT);
     }
@@ -211,7 +211,7 @@ class PrecognitionTestController
         throw new \Exception('xxxx');
     }
 
-    public function predictCheckPrecogMacro()
+    public function checkPrecogMacroPrediction()
     {
         return request()->precognitive() ? 'yes' : 'no';
     }
@@ -226,7 +226,7 @@ class PrecognitionTestController
         throw new \Exception('xxxx');
     }
 
-    public function predictCheckArguments($request, $user)
+    public function checkArgumentsPrediction($request, $user)
     {
         return [
             'request' => $request::class,
@@ -235,7 +235,7 @@ class PrecognitionTestController
         ];
     }
 
-    public function predictThrowNotFound()
+    public function throwNotFoundPrediction()
     {
         throw new ModelNotFoundException();
     }
