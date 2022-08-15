@@ -191,6 +191,8 @@ class FoundationFormRequestTest extends TestCase
 
         $request = $class::create('/', 'GET', $payload);
 
+        $request::macro('precognitive', fn () => false);
+
         return $request->setRedirector($this->createMockRedirector($request))
                        ->setContainer($container);
     }
