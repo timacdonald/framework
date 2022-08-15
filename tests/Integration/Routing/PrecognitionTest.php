@@ -2,10 +2,12 @@
 
 namespace Illuminate\Tests\Integration\Routing;
 
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Foundation\Http\Middleware\Precognition;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Route;
 use Orchestra\Testbench\TestCase;
 
@@ -154,23 +156,41 @@ class PrecognitionTest extends TestCase
 
     public function testResponsesGeneratedViaExceptionBasedFlowControlHavePreparedHeaders()
     {
-        $this->markTestIncomplete('wip');
-    }
+        Route::get('test-route', [PrecognitionTestController::class, 'throwNotFound'])
+            ->middleware([Precognition::class]);
 
-    public function testBeforeMiddleware()
-    {
-        // what happens when they return a response
-        // what happens when they throw an exception
-        // can they detect that precognition is active?
-        $this->markTestIncomplete('wip');
-    }
+        $response = $this->get('test-route', ['Precognition' => 'true']);
 
-    public function testAfterMiddleware()
-    {
-        // what happens when they return a response
-        // what happens when they throw an exception
-        // can they detect that precognition is active?
-        $this->markTestIncomplete('wip');
+        $response->assertNotFound();
+        $response->assertHeader('Precognition', 'true');
+
+        // Authorize first...
+        Gate::define('alwaysDeny', fn () => false);
+        Route::get('test-route', function () {
+            throw new Exception('xxxx');
+        })->middleware([
+            'can:alwaysDeny',
+            Precognition::class,
+        ]);
+
+        $response = $this->get('test-route', ['Precognition' => 'true']);
+
+        $response->assertForbidden();
+        $response->assertHeader('Precognition', 'true');
+
+        // Authorize last...
+        Gate::define('alwaysDeny', fn () => false);
+        Route::get('test-route', function () {
+            throw new Exception('xxxx');
+        })->middleware([
+            Precognition::class,
+            'can:alwaysDeny',
+        ]);
+
+        $response = $this->get('test-route', ['Precognition' => 'true']);
+
+        $response->assertForbidden();
+        $response->assertHeader('Precognition', 'true');
     }
 }
 
@@ -213,6 +233,16 @@ class PrecognitionTestController
             'user' => $user,
             'count' => count(func_get_args()),
         ];
+    }
+
+    public function predictThrowNotFound()
+    {
+        throw new ModelNotFoundException();
+    }
+
+    public function throwNotFound()
+    {
+        throw new Exception('xxxx');
     }
 }
 
