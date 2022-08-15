@@ -141,6 +141,7 @@ class PrecognitionTest extends TestCase
             'Precognition-Validate-Only' => 'sometimes_1,sometimes_2',
         ]);
 
+
         $response->assertJsonPath('errors', [
             'sometimes_1' => [
                 'The sometimes 1 must be an integer.'
