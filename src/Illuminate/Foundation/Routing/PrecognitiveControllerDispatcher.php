@@ -56,7 +56,7 @@ class PrecognitiveControllerDispatcher extends ControllerDispatcher
      */
     protected function controllerPrediction($route, $controller, $method, $arguments)
     {
-        $predictiveMethod = Str::studly($method).'prediction';
+        $predictiveMethod = Str::studly($method).'Prediction';
 
         if (method_exists($controller, $predictiveMethod)) {
             return $controller->{$predictiveMethod}(...array_values($arguments));
