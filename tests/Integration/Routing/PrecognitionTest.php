@@ -5,6 +5,7 @@ namespace Illuminate\Tests\Integration\Routing;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Foundation\Http\Middleware\Precognition;
+use Illuminate\Foundation\Routing\PredictsOutcomes;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Gate;
@@ -192,10 +193,60 @@ class PrecognitionTest extends TestCase
         $response->assertForbidden();
         $response->assertHeader('Precognition', 'true');
     }
+
+    public function testPredictionMethodCanPassValuesToMainControllerMethod()
+    {
+        Route::get('test-route', [PrecognitionTestController::class, 'passValuesBetweenMethods'])
+            ->middleware([Precognition::class]);
+
+        $response = $this->get('test-route');
+
+        $response->assertOk();
+        $response->assertExactJson([
+            'Laravel' => 'PHP',
+            'Vue' => 'JavaScript',
+        ]);
+    }
+
+    public function testPredictionMethodReceivesArgumentsWhenResolvingPrediction()
+    {
+        Route::get('test-route', [PrecognitionTestController::class, 'passValuesBetweenMethodsWithArguments'])
+            ->middleware([Precognition::class]);
+
+        $response = $this->get('test-route?q=41');
+
+        $response->assertOk();
+        $this->assertSame('41', $response->content());
+    }
+
+    public function testOutcomeCanSpecifyPredictionViaClosure()
+    {
+        Route::get('test-route', [PrecognitionTestController::class, 'passValuesCallingPredictionViaClosure'])
+            ->middleware([Precognition::class]);
+
+        $response = $this->get('test-route');
+
+        $response->assertOk();
+        $response->assertExactJson([
+            'received' => 'expected-value',
+        ]);
+    }
+
+    public function testItCanReturnPassedOnValuesFromPrediction()
+    {
+        Route::get('test-route', [PrecognitionTestController::class, 'returnPassOn'])
+            ->middleware([Precognition::class]);
+
+        $response = $this->get('test-route', ['Precognition' => 'true']);
+
+        $response->assertNoContent();
+    }
 }
 
 class PrecognitionTestController
 {
+    use PredictsOutcomes;
+
     public function updatePrediction()
     {
         return response('Conflict', Response::HTTP_CONFLICT);
@@ -241,6 +292,51 @@ class PrecognitionTestController
     }
 
     public function throwNotFound()
+    {
+        throw new Exception('xxxx');
+    }
+
+    public function passValuesBetweenMethodsPrediction()
+    {
+        $this->passToOutcome([
+            'Laravel' => 'PHP',
+            'Vue' => 'JavaScript',
+        ]);
+    }
+
+    public function passValuesBetweenMethods()
+    {
+        return $this->resolvePrediction();
+    }
+
+    public function passValuesBetweenMethodsWithArgumentsPrediction($request)
+    {
+        $this->passToOutcome($request->input('q'));
+    }
+
+    public function passValuesBetweenMethodsWithArguments(Request $request)
+    {
+        return $this->resolvePrediction();
+    }
+
+    public function passValuesCallingPredictionViaClosureSnowflakePrediction($param)
+    {
+        $this->passToOutcome([
+            'received' => $param,
+        ]);
+    }
+
+    public function passValuesCallingPredictionViaClosure()
+    {
+        return $this->resolvePrediction(fn () => $this->passValuesCallingPredictionViaClosureSnowflakePrediction('expected-value'));
+    }
+
+    public function returnPassOnPrediction()
+    {
+        return $this->passToOutcome('foo');
+    }
+
+    public function returnPassOn()
     {
         throw new Exception('xxxx');
     }
