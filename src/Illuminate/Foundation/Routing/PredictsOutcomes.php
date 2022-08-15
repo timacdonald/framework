@@ -7,7 +7,7 @@ trait PredictsOutcomes
     /**
      * The payload from the prediction that is to be passed to the controller.
      *
-     * @var \Illuminate\Foundation\Routing\PredictionPayload
+     * @var \Illuminate\Foundation\Routing\PredictionPayload|null
      */
     protected $predictionPayload;
 
@@ -40,6 +40,6 @@ trait PredictsOutcomes
 
         $callable();
 
-        return tap($this->predictionPayload->value(), fn () => $this->predictionPayload = null);
+        return tap($this->predictionPayload?->value(), fn () => $this->predictionPayload = null);
     }
 }
