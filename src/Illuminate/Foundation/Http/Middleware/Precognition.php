@@ -51,7 +51,7 @@ class Precognition
      */
     protected function isAttemptingPrecognition($request)
     {
-        return (bool) $request->header('Precognition');
+        return in_array($request->header('Precognition'), ['true', '1'], true);
     }
 
     /**

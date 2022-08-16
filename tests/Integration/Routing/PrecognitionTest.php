@@ -155,6 +155,25 @@ class PrecognitionTest extends TestCase
         ]);
     }
 
+    public function testItCanSpecifyNoRulesToValidate()
+    {
+        Route::post('test-route', function (PrecognitionTestRequest $request) {
+            //
+        })->middleware([Precognition::class]);
+
+        $response = $this->postJson('test-route', [
+            'always' => 'foo',
+            'sometimes_1' => 'foo',
+            'sometimes_2' => 'foo',
+            'whenNotPrecognitive' => 'foo',
+        ], [
+            'Precognition' => 'true',
+            'Precognition-Validate-Only' => '',
+        ]);
+
+        $response->assertNoContent();
+    }
+
     public function testResponsesGeneratedViaExceptionBasedFlowControlHavePreparedHeaders()
     {
         Route::get('test-route', [PrecognitionTestController::class, 'throwNotFound'])
@@ -240,6 +259,21 @@ class PrecognitionTest extends TestCase
         $response = $this->get('test-route', ['Precognition' => 'true']);
 
         $response->assertNoContent();
+    }
+
+    public function testPrecognitionHeaderCanBeTrueOrOne()
+    {
+        Route::get('test-route', function () {
+            throw new Exception('xxxx');
+        })->middleware([Precognition::class]);
+
+        $response = $this->get('test-route', ['Precognition' => '1']);
+        $response->assertNoContent();
+        $response->assertHeader('Precognition', 'true');
+
+        $response = $this->get('test-route', ['Precognition' => 'true']);
+        $response->assertNoContent();
+        $response->assertHeader('Precognition', 'true');
     }
 }
 
