@@ -275,6 +275,24 @@ class PrecognitionTest extends TestCase
         $response->assertNoContent();
         $response->assertHeader('Precognition', 'true');
     }
+
+    public function testItCanCallPassToControllerMethodMultilpleTimesInPrediction()
+    {
+        $this->markTestIncomplete('WIP');
+    }
+
+    public function testWhenResponseIsReturnedFromPredictionDuringResolveItReturnsThatResponseToTheClient()
+    {
+        // When the prediction method returns a response, such as a 404, that
+        // should be respected and the controller should not continue
+        // execution.
+        $this->markTestIncomplete('WIP');
+    }
+
+    public function testItAppendsAnAdditionalVaryHeaderInsteadOfReplacingAnyExistingHeaders()
+    {
+        $this->markTestIncomplete('WIP');
+    }
 }
 
 class PrecognitionTestController
