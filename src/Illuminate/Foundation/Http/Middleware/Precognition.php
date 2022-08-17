@@ -40,7 +40,7 @@ class Precognition
 
         $this->prepareForPrecognition($request);
 
-        return $this->handleResponse($next($request));
+        return $this->withResponse($next($request), $request);
     }
 
     /**
@@ -89,10 +89,11 @@ class Precognition
     /**
      * Prepare the outgoing precognitive response.
      *
+     * @param  \Illuminate\Http\Request  $request
      * @param  \Illuminate\Http\Response  $response
      * @return \Illuminate\Http\Response
      */
-    protected function handleResponse($response)
+    protected function withResponse($request, $response)
     {
         return $response
             ->header('Precognition', 'true')
