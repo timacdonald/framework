@@ -40,7 +40,7 @@ class Precognition
 
         $this->prepareForPrecognition($request);
 
-        return $this->withResponse($next($request), $request);
+        return $this->withResponse($request, $next($request));
     }
 
     /**
