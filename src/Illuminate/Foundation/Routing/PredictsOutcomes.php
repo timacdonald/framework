@@ -51,12 +51,12 @@ trait PredictsOutcomes
         // TODO: handle the response here.
         $response = $this->{"{$function}Prediction"}(...$args);
 
-        if ($response instanceof Response) {
-            $response->throwResponse();
-        }
-
         if ($response === null) {
             return tap($this->outcomePayload, fn () => $this->clearOutcomePayload());
+        }
+
+        if ($response instanceof Response) {
+            $response->throwResponse();
         }
 
         throw new RuntimeException('TODO');
