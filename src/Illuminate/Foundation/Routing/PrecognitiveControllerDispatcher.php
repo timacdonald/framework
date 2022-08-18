@@ -61,10 +61,12 @@ class PrecognitiveControllerDispatcher extends ControllerDispatcher
             return;
         }
 
-        return tap($controller->{$method}(...array_values($arguments)), function () use ($controller) {
-            if (method_exists($controller, 'clearOutcomePayload')) {
-                $controller->clearOutcomePayload();
-            }
-        });
+        $response = $controller->{$method}(...array_values($arguments));
+
+        if (method_exists($controller, 'clearOutcomePayload')) {
+            $controller->clearOutcomePayload();
+        }
+
+        return $response === $controller ? null : $response;
    }
 }

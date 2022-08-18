@@ -238,19 +238,6 @@ class PrecognitionTest extends TestCase
         $this->assertSame('41', $response->content());
     }
 
-    public function testOutcomeCanSpecifyPredictionViaClosure()
-    {
-        Route::get('test-route', [PrecognitionTestController::class, 'passValuesCallingPredictionViaClosure'])
-            ->middleware([Precognition::class]);
-
-        $response = $this->get('test-route');
-
-        $response->assertOk();
-        $response->assertExactJson([
-            'received' => 'expected-value',
-        ]);
-    }
-
     public function testItCanReturnPassedOnValuesFromPrediction()
     {
         Route::get('test-route', [PrecognitionTestController::class, 'returnPassOn'])
@@ -350,15 +337,17 @@ class PrecognitionTestController
 
     public function passValuesBetweenMethodsPrediction()
     {
-        $this->passToOutcome([
-            'Laravel' => 'PHP',
-            'Vue' => 'JavaScript',
-        ]);
+        $this->passToOutcome('PHP', 'JavaScript');
     }
 
     public function passValuesBetweenMethods()
     {
-        return $this->resolvePrediction();
+        [$backend, $frontend] = $this->resolvePrediction();
+
+        return [
+            'Laravel' => $backend,
+            'Vue' => $frontend,
+        ];
     }
 
     public function passValuesBetweenMethodsWithArgumentsPrediction($request)
@@ -368,19 +357,9 @@ class PrecognitionTestController
 
     public function passValuesBetweenMethodsWithArguments(Request $request)
     {
-        return $this->resolvePrediction();
-    }
+        [$q] = $this->resolvePrediction();
 
-    public function passValuesCallingPredictionViaClosureSnowflakePrediction($param)
-    {
-        $this->passToOutcome([
-            'received' => $param,
-        ]);
-    }
-
-    public function passValuesCallingPredictionViaClosure()
-    {
-        return $this->resolvePrediction(fn () => $this->passValuesCallingPredictionViaClosureSnowflakePrediction('expected-value'));
+        return $q;
     }
 
     public function returnPassOnPrediction()
