@@ -265,7 +265,13 @@ class PrecognitionTest extends TestCase
 
     public function testItCanCallPassToControllerMethodMultilpleTimesInPrediction()
     {
-        $this->markTestIncomplete('WIP');
+        Route::get('test-route', [PrecognitionTestController::class, 'testCanPassToOutcomeMultilpleTimes'])
+            ->middleware([Precognition::class]);
+
+        $response = $this->get('test-route');
+
+        $response->assertJson(['a', 'b', 'c']);
+        $response->assertHeaderMissing('Precognition');
     }
 
     public function testWhenResponseIsReturnedFromPredictionDuringResolveItReturnsThatResponseToTheClient()
@@ -276,6 +282,17 @@ class PrecognitionTest extends TestCase
         $response = $this->get('test-route');
 
         $this->assertSame('expected-response', $response->content());
+        $response->assertHeaderMissing('Precognition');
+    }
+
+    public function testPredictionResponseIsParsedToSymfonyResponse()
+    {
+        Route::get('test-route', [PrecognitionTestController::class, 'testResponseFromPredictionIsParsedToSymfonyResponse'])
+            ->middleware([Precognition::class]);
+
+        $response = $this->get('test-route');
+
+        $response->assertJson(['expected' => 'response']);
         $response->assertHeaderMissing('Precognition');
     }
 
@@ -385,6 +402,29 @@ class PrecognitionTestController
         $this->resolvePrediction();
 
         throw new Exception('xxxx');
+    }
+
+    public function testResponseFromPredictionIsParsedToSymfonyResponsePrediction()
+    {
+        return ['expected' => 'response'];
+    }
+
+    public function testResponseFromPredictionIsParsedToSymfonyResponse()
+    {
+        $this->resolvePrediction();
+
+        throw new Exception('xxxx');
+    }
+
+    public function testCanPassToOutcomeMultilpleTimesPrediction()
+    {
+        $this->passToOutcome('a');
+        $this->passToOutcome('b', 'c');
+    }
+
+    public function testCanPassToOutcomeMultilpleTimes()
+    {
+        return $this->resolvePrediction();
     }
 }
 
