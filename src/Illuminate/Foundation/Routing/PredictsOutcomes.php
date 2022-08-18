@@ -2,8 +2,10 @@
 
 namespace Illuminate\Foundation\Routing;
 
+use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Response;
+use Illuminate\Routing\Router;
 use RuntimeException;
 
 trait PredictsOutcomes
@@ -26,11 +28,11 @@ trait PredictsOutcomes
     }
 
     /**
-     * Retrieve the payload and clear.
+     * Retrieve and clear the payload.
      *
      * @return array
      */
-    protected function getAndClearPayload()
+    protected function pullOutcomePayload()
     {
         return tap($this->outcomePayload, fn () => $this->clearOutcomePayload());
     }
@@ -49,9 +51,10 @@ trait PredictsOutcomes
     /**
      * Run the prediction and return any passed payload.
      *
+     * @param  null|\Illuminate\Http\Request  $request
      * @return array
      */
-    protected function resolvePrediction()
+    protected function resolvePrediction($request = null)
     {
         $this->clearOutcomePayload();
 
@@ -60,15 +63,13 @@ trait PredictsOutcomes
         $response = $this->{"{$function}Prediction"}(...$args);
 
         if ($response === null) {
-            return $this->getAndClearPayload();
+            return $this->pullOutcomePayload();
         }
 
         $this->clearOutcomePayload();
 
-        if ($response instanceof Response || $response instanceof JsonResponse) {
-            $response->throwResponse();
-        }
-
-        throw new RuntimeException('Prediction methods must return null, or an instance of Illuminate\\Http\\Response or Illuminate\\Http\\JsonResponse.');
+        throw new HttpResponseException(
+            Router::toResponse($request ?? app('request'), $response)
+        );
     }
 }

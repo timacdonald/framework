@@ -64,16 +64,10 @@ class PrecognitiveControllerDispatcher extends ControllerDispatcher
             return;
         }
 
-        $response = $controller->{$method}(...array_values($arguments));
-
-        if (method_exists($controller, 'clearOutcomePayload')) {
-            $controller->clearOutcomePayload();
-        }
-
-        if ($response === null || $response instanceof Response || $response instanceof JsonResponse) {
-            return $response;
-        }
-
-        throw new RuntimeException('Prediction methods must return null, or an instance of Illuminate\\Http\\Response or Illuminate\\Http\\JsonResponse.');
+        return tap($controller->{$method}(...array_values($arguments)), function () use ($controller) {
+            if (method_exists($controller, 'clearOutcomePayload')) {
+                $controller->clearOutcomePayload();
+            }
+        });
    }
 }
