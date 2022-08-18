@@ -62,8 +62,8 @@ class PrecognitiveControllerDispatcher extends ControllerDispatcher
         }
 
         return tap($controller->{$method}(...array_values($arguments)), function () use ($controller) {
-            if (method_exists($controller, 'clearPredictionPayload')) {
-                $controller->clearPredictionPayload();
+            if (method_exists($controller, 'clearOutcomePayload')) {
+                $controller->clearOutcomePayload();
             }
         });
    }

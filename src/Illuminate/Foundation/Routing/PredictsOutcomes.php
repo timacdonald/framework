@@ -5,33 +5,33 @@ namespace Illuminate\Foundation\Routing;
 trait PredictsOutcomes
 {
     /**
-     * The payload from the prediction to be resolved in the controller.
+     * The payload from the prediction to be resolved in the outcome.
      *
      * @var array
      */
-    protected $predictionPayload = [];
+    protected $outcomePayload = [];
 
     /**
-     * Clear the prediction payload.
+     * Clear the outcome payload.
      *
      * @return $this
      */
-    public function clearPredictionPayload()
+    public function clearOutcomePayload()
     {
-        $this->predictionPayload = [];
+        $this->outcomePayload = [];
 
         return $this;
     }
 
     /**
-     * Pass data between the prediction method and the non-Precognition method.
+     * Pass data to the outcome function.
      *
      * @param  ...mixed  $payload
      * @return void
      */
     protected function passToOutcome(...$payload)
     {
-        $this->predictionPayload = array_merge($this->predictionPayload, $args);
+        $this->outcomePayload = array_merge($this->outcomePayload, $args);
     }
 
     /**
@@ -41,13 +41,13 @@ trait PredictsOutcomes
      */
     protected function resolvePrediction()
     {
-        $this->clearPredictionPayload();
+        $this->clearOutcomePayload();
 
         ['function' => $function, 'args' => $args] = debug_backtrace(0, 2)[1];
 
         // TODO: handle the response here.
         $response = $this->{$function.'Prediction'}(...$args);
 
-        return tap($this->predictionPayload, fn () => $this->clearPredictionPayload());
+        return tap($this->outcomePayload, fn () => $this->clearOutcomePayload());
     }
 }
