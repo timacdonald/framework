@@ -30,11 +30,13 @@ trait PredictsOutcomes
      * Pass data to the outcome function.
      *
      * @param  ...mixed  $values
-     * @return void
+     * @return $this
      */
     protected function passToOutcome(...$values)
     {
         $this->outcomePayload = array_merge($this->outcomePayload, $values);
+
+        return $this;
     }
 
     /**
@@ -50,7 +52,7 @@ trait PredictsOutcomes
 
         $response = $this->{"{$function}Prediction"}(...$args);
 
-        if ($response === null) {
+        if ($response === null || $response === $this) {
             return tap($this->outcomePayload, fn () => $this->clearOutcomePayload());
         }
 
