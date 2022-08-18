@@ -55,7 +55,7 @@ class PrecognitiveControllerDispatcher extends ControllerDispatcher
      */
     protected function controllerPrediction($route, $controller, $method, $arguments)
     {
-        $method .= "Prediction";
+        $method .= 'Prediction';
 
         if (! method_exists($controller, $method)) {
             return;
