@@ -233,7 +233,7 @@ class Route
             $callable = unserialize($this->action['uses'])->getClosure();
         }
 
-        return $this->container->make(CallableDispatcher::class)->dispatch($this, $callable);
+        return $this->container[CallableDispatcher::class]->dispatch($this, $callable);
     }
 
     /**
