@@ -14,11 +14,13 @@ trait PredictsOutcomes
     /**
      * Clear the prediction payload.
      *
-     * @return void
+     * @return $this
      */
     public function clearPredictionPayload()
     {
         $this->predictionPayload = [];
+
+        return $this;
     }
 
     /**
