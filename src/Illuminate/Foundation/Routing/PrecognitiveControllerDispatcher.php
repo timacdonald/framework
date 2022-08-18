@@ -61,10 +61,6 @@ class PrecognitiveControllerDispatcher extends ControllerDispatcher
             return;
         }
 
-        $response = $controller->{$predictiveMethod}(...array_values($arguments));
-
-        return $response instanceof PredictionPayload
-            ? null
-            : $response;
+        return $controller->{$predictiveMethod}(...array_values($arguments));
     }
 }
