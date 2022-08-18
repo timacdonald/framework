@@ -12,6 +12,16 @@ trait PredictsOutcomes
     protected $predictionPayload = [];
 
     /**
+     * Clear the prediction payload.
+     *
+     * @return void
+     */
+    public function clearPredictionPayload()
+    {
+        $this->predictionPayload = [];
+    }
+
+    /**
      * Pass data between the prediction method and the non-Precognition method.
      *
      * @param  ...mixed  $payload
@@ -27,20 +37,15 @@ trait PredictsOutcomes
      *
      * @return array
      */
-    protected function resolvePrediction($callable = null)
+    protected function resolvePrediction()
     {
-        $this->predictionPayload = [];
+        $this->clearPredictionPayload();
 
-        $callable ??= function () {
-            $caller = debug_backtrace(0, 3)[2];
+        ['function' => $function, 'args' => $args] = debug_backtrace(0, 2)[1];
 
-            $method = $caller['function'].'Prediction';
+        // TODO: handle the response here.
+        $response = $this->{$function.'Prediction'}(...$args);
 
-            $response = $this->{$method}(...$caller['args']);
-        };
-
-        $callable();
-
-        return tap($this->predictionPayload, fn () => $this->predictionPayload = []);
+        return tap($this->predictionPayload, fn () => $this->clearPredictionPayload());
     }
 }
