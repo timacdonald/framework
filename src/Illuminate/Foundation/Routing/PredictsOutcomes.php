@@ -48,7 +48,6 @@ trait PredictsOutcomes
 
         ['function' => $function, 'args' => $args] = debug_backtrace(0, 2)[1];
 
-        // TODO: handle the response here.
         $response = $this->{"{$function}Prediction"}(...$args);
 
         if ($response === null) {
