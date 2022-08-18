@@ -60,6 +60,6 @@ trait PredictsOutcomes
             $response->throwResponse();
         }
 
-        throw new RuntimeException('TODO');
+        throw new RuntimeException('Prediction methods must return null or an instance of the Illuminate\\Http\\Response.');
     }
 }
