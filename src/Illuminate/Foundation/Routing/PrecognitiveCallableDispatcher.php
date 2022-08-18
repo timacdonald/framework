@@ -21,7 +21,7 @@ class PrecognitiveCallableDispatcher extends CallableDispatcher
      * @param  \Illuminate\Container\Container  $container
      * @param  callable  $emptyResponseResolver
      */
-    public function __construct(Container $container, $emptyResponseResolver)
+    public function __construct($container, $emptyResponseResolver)
     {
         parent::__construct($container);
 
