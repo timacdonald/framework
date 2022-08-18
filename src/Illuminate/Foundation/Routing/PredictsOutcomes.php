@@ -2,6 +2,9 @@
 
 namespace Illuminate\Foundation\Routing;
 
+use Illuminate\Http\Response;
+use RuntimeException;
+
 trait PredictsOutcomes
 {
     /**
@@ -48,6 +51,14 @@ trait PredictsOutcomes
         // TODO: handle the response here.
         $response = $this->{"{$function}Prediction"}(...$args);
 
-        return tap($this->outcomePayload, fn () => $this->clearOutcomePayload());
+        if ($response instanceof Response) {
+            $response->throwResponse();
+        }
+
+        if ($response === null) {
+            return tap($this->outcomePayload, fn () => $this->clearOutcomePayload());
+        }
+
+        throw new RuntimeException('TODO');
     }
 }
