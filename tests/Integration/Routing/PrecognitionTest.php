@@ -298,7 +298,7 @@ class PrecognitionTest extends TestCase
 
     public function testItAppendsAnAdditionalVaryHeaderInsteadOfReplacingAnyExistingHeaders()
     {
-        $this->markTestIncomplete('WIP');
+        $this->markTestSkipped('Need to check this is valid. Perhaps is should be comma seperated.');
     }
 }
 
