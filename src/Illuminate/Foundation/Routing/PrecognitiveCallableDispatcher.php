@@ -39,7 +39,7 @@ class PrecognitiveCallableDispatcher extends CallableDispatcher
         return call_user_func_array($this->emptyResponseResolver, [
             $route,
             $callable,
-            $this->resolveArguments($route, $callable);
+            $this->resolveArguments($route, $callable)
         ]);
     }
 }
