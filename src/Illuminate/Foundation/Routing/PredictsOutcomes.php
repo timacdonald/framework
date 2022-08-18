@@ -26,12 +26,12 @@ trait PredictsOutcomes
     /**
      * Pass data to the outcome function.
      *
-     * @param  ...mixed  $payload
+     * @param  ...mixed  $values
      * @return void
      */
-    protected function passToOutcome(...$payload)
+    protected function passToOutcome(...$values)
     {
-        $this->outcomePayload = array_merge($this->outcomePayload, $args);
+        $this->outcomePayload = array_merge($this->outcomePayload, $values);
     }
 
     /**
@@ -46,7 +46,7 @@ trait PredictsOutcomes
         ['function' => $function, 'args' => $args] = debug_backtrace(0, 2)[1];
 
         // TODO: handle the response here.
-        $response = $this->{$function.'Prediction'}(...$args);
+        $response = $this->{"{$function}Prediction"}(...$args);
 
         return tap($this->outcomePayload, fn () => $this->clearOutcomePayload());
     }
