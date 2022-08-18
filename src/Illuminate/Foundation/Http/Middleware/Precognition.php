@@ -87,7 +87,7 @@ class Precognition
     }
 
     /**
-     * Prepare the outgoing precognitive response.
+     * Customize the response for a precognitive request.
      *
      * @param  \Illuminate\Http\Request  $request
      * @param  \Illuminate\Http\Response  $response
