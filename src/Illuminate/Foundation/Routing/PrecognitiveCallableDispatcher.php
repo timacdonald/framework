@@ -2,7 +2,6 @@
 
 namespace Illuminate\Foundation\Routing;
 
-use Illuminate\Container\Container;
 use Illuminate\Routing\CallableDispatcher;
 use Illuminate\Routing\Route;
 

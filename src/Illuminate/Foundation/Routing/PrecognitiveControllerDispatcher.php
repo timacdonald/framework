@@ -3,7 +3,6 @@
 namespace Illuminate\Foundation\Routing;
 
 use Illuminate\Routing\ControllerDispatcher;
-use Illuminate\Container\Container;
 use Illuminate\Routing\Route;
 use Illuminate\Support\Str;
 
@@ -22,7 +21,7 @@ class PrecognitiveControllerDispatcher extends ControllerDispatcher
      * @param  \Illuminate\Container\Container  $container
      * @param  callable  $emptyResponseResolver
      */
-    public function __construct(Container $container, $emptyResponseResolver)
+    public function __construct($container, $emptyResponseResolver)
     {
         parent::__construct($container);
 
