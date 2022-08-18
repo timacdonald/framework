@@ -49,8 +49,6 @@ class CallableDispatcher implements CallableDispatcherContract
      */
     protected function resolveArguments(Route $route, $callable)
     {
-        return $this->resolveMethodDependencies(
-            $route->parametersWithoutNulls(), new ReflectionFunction($callable)
-        );
+        return $this->resolveMethodDependencies($route->parametersWithoutNulls(), new ReflectionFunction($callable));
     }
 }
