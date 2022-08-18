@@ -270,10 +270,13 @@ class PrecognitionTest extends TestCase
 
     public function testWhenResponseIsReturnedFromPredictionDuringResolveItReturnsThatResponseToTheClient()
     {
-        // When the prediction method returns a response, such as a 404, that
-        // should be respected and the controller should not continue
-        // execution.
-        $this->markTestIncomplete('WIP');
+        Route::get('test-route', [PrecognitionTestController::class, 'testResponseFromPredictionIsReturned'])
+            ->middleware([Precognition::class]);
+
+        $response = $this->get('test-route');
+
+        $this->assertSame('expected-response', $response->content());
+        $response->assertHeaderMissing('Precognition');
     }
 
     public function testItAppendsAnAdditionalVaryHeaderInsteadOfReplacingAnyExistingHeaders()
@@ -369,6 +372,18 @@ class PrecognitionTestController
 
     public function returnPassOn()
     {
+        throw new Exception('xxxx');
+    }
+
+    public function testResponseFromPredictionIsReturnedPrediction()
+    {
+        return response('expected-response');
+    }
+
+    public function testResponseFromPredictionIsReturned()
+    {
+        $this->resolvePrediction();
+
         throw new Exception('xxxx');
     }
 }
