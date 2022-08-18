@@ -2,9 +2,12 @@
 
 namespace Illuminate\Foundation\Routing;
 
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Response;
 use Illuminate\Routing\ControllerDispatcher;
 use Illuminate\Routing\Route;
 use Illuminate\Support\Str;
+use RuntimeException;
 
 class PrecognitiveControllerDispatcher extends ControllerDispatcher
 {
@@ -67,6 +70,10 @@ class PrecognitiveControllerDispatcher extends ControllerDispatcher
             $controller->clearOutcomePayload();
         }
 
-        return $response === $controller ? null : $response;
+        if ($response === null || $response instanceof Response || $response instanceof JsonResponse) {
+            return $response;
+        }
+
+        throw new RuntimeException('Prediction methods must return null, or an instance of Illuminate\\Http\\Response or Illuminate\\Http\\JsonResponse.');
    }
 }

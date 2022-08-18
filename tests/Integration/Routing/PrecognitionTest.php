@@ -303,7 +303,7 @@ class PrecognitionTestController
 
     public function checkPrecogMacroPrediction()
     {
-        return request()->precognitive() ? 'yes' : 'no';
+        return response(request()->precognitive() ? 'yes' : 'no');
     }
 
     public function checkPrecogMacro()
@@ -318,11 +318,11 @@ class PrecognitionTestController
 
     public function checkArgumentsPrediction($request, $user)
     {
-        return [
+        return response()->json([
             'request' => $request::class,
             'user' => $user,
             'count' => count(func_get_args()),
-        ];
+        ]);
     }
 
     public function throwNotFoundPrediction()

@@ -2,6 +2,7 @@
 
 namespace Illuminate\Foundation\Routing;
 
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Response;
 use RuntimeException;
 
@@ -17,26 +18,32 @@ trait PredictsOutcomes
     /**
      * Clear the outcome payload.
      *
-     * @return $this
+     * @return void
      */
     public function clearOutcomePayload()
     {
         $this->outcomePayload = [];
+    }
 
-        return $this;
+    /**
+     * Retrieve the payload and clear.
+     *
+     * @return array
+     */
+    protected function getAndClearPayload()
+    {
+        return tap($this->outcomePayload, fn () => $this->clearOutcomePayload());
     }
 
     /**
      * Pass data to the outcome function.
      *
      * @param  ...mixed  $values
-     * @return $this
+     * @return void
      */
     protected function passToOutcome(...$values)
     {
         $this->outcomePayload = array_merge($this->outcomePayload, $values);
-
-        return $this;
     }
 
     /**
@@ -52,14 +59,16 @@ trait PredictsOutcomes
 
         $response = $this->{"{$function}Prediction"}(...$args);
 
-        if ($response === null || $response === $this) {
-            return tap($this->outcomePayload, fn () => $this->clearOutcomePayload());
+        if ($response === null) {
+            return $this->getAndClearPayload();
         }
 
-        if ($response instanceof Response) {
+        $this->clearOutcomePayload();
+
+        if ($response instanceof Response || $response instanceof JsonResponse) {
             $response->throwResponse();
         }
 
-        throw new RuntimeException('Prediction methods must return null or an instance of the Illuminate\\Http\\Response.');
+        throw new RuntimeException('Prediction methods must return null, or an instance of Illuminate\\Http\\Response or Illuminate\\Http\\JsonResponse.');
     }
 }
