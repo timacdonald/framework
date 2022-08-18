@@ -5,41 +5,42 @@ namespace Illuminate\Foundation\Routing;
 trait PredictsOutcomes
 {
     /**
-     * The payload from the prediction that is to be passed to the controller.
+     * The payload from the prediction to be resolved in the controller.
      *
-     * @var \Illuminate\Foundation\Routing\PredictionPayload|null
+     * @var array
      */
-    protected $predictionPayload;
+    protected $predictionPayload = [];
 
     /**
      * Pass data between the prediction method and the non-Precognition method.
      *
-     * @return \Illuminate\Foundation\Routing\PredictionPayload
+     * @param  ...mixed  $payload
+     * @return void
      */
-    protected function passToOutcome($payload)
+    protected function passToOutcome(...$payload)
     {
-        return tap(new PredictionPayload($payload), fn ($payload) => $this->predictionPayload = $payload);
+        $this->predictionPayload = array_merge($this->predictionPayload, $args);
     }
 
     /**
      * Run the prediction and return any passed payload.
      *
-     * @return mixed
+     * @return array
      */
     protected function resolvePrediction($callable = null)
     {
-        $this->predictionPayload = null;
+        $this->predictionPayload = [];
 
         $callable ??= function () {
             $caller = debug_backtrace(0, 3)[2];
 
             $method = $caller['function'].'Prediction';
 
-            $this->{$method}(...$caller['args']);
+            $response = $this->{$method}(...$caller['args']);
         };
 
         $callable();
 
-        return tap($this->predictionPayload?->value(), fn () => $this->predictionPayload = null);
+        return tap($this->predictionPayload, fn () => $this->predictionPayload = []);
     }
 }
