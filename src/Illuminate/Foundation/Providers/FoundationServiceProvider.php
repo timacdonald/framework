@@ -155,8 +155,6 @@ class FoundationServiceProvider extends AggregateServiceProvider
      */
     protected function registerPrecognition()
     {
-        $this->app->instance('precognitive', false);
-
-        Request::macro('precognitive', fn () => app('precognitive'));
+        Request::macro('precognitive', fn () => $this->attributes->get('precognitive', false));
     }
 }

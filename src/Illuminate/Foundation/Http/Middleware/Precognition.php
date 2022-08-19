@@ -62,7 +62,7 @@ class Precognition
      */
     protected function prepareForPrecognition($request)
     {
-        $this->container->instance('precognitive', true);
+        $request->attributes->set('precognitive', true);
 
         $this->container->singleton(
             CallableDispatcher::class,

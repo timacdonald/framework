@@ -50,17 +50,21 @@ class PrecognitionTest extends TestCase
         $response->assertHeader('Precognition', 'true');
     }
 
-    public function testItBindsPrecognitiveStateToContainer()
+    public function testItBindsPrecognitiveStateToRequestAttribute()
     {
         Route::get('test-route', function () {
             throw new \Exception('xxxx');
         })->middleware(Precognition::class);
 
-        $this->assertFalse($this->app['precognitive']);
+        $this->get('test-route');
+
+        $this->assertNull(request()->attributes->get('precognitive'));
+        $this->assertFalse(request()->precognitive());
 
         $this->get('test-route', ['Precognition' => 'true']);
 
-        $this->assertTrue($this->app['precognitive']);
+        $this->assertTrue(request()->attributes->get('precognitive'));
+        $this->assertTrue(request()->precognitive());
     }
 
     public function testItBindsRequestMacro()
