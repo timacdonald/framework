@@ -80,6 +80,6 @@ trait PredictsOutcomes
      */
     protected function whenNotPrecognitive($rule, $request = null)
     {
-        return Rule::when(! ($request ??= request())->precognitive(), $rule);
+        return Rule::when(! ($request ?? request())->precognitive(), $rule);
     }
 }
