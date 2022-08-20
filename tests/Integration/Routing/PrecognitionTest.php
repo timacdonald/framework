@@ -30,7 +30,7 @@ class PrecognitionTest extends TestCase
 
     public function testItProvidesSensibleEmptyResponseViaControllerRoutes()
     {
-        Route::get('test-route', [PrecognitionTestController::class, 'show'])
+        Route::get('test-route', [PrecognitionTestController::class, 'methodWithNoPrediction'])
             ->middleware(Precognition::class);
 
         $response = $this->get('test-route', ['Precognition' => 'true']);
@@ -433,7 +433,12 @@ class PrecognitionTest extends TestCase
 
     public function testItAppendsAnAdditionalVaryHeaderInsteadOfReplacingAnyExistingHeaders()
     {
-        $this->markTestSkipped('Need to check this is valid. Perhaps is should be comma seperated.');
+        Route::get('test-route', [PrecognitionTestController::class, 'methodWherePredictionSetsVaryHeaderOnReturnedResponse'])
+            ->middleware([Precognition::class]);
+
+        $response = $this->get('test-route', ['Precognition' => 'true']);
+
+        $response->assertHeader('Vary', 'X-Inertia, Precognition');
     }
 
     public function testPrecognitionForControllerMethodThatDoesntExist()
@@ -464,9 +469,19 @@ class PrecognitionTestController
         throw new \Exception('xxxx');
     }
 
-    public function show()
+    public function methodWithNoPrediction()
     {
         throw new \Exception('xxxx');
+    }
+
+    public function methodWherePredictionSetsVaryHeaderOnReturnedResponse()
+    {
+        throw new \Exception('xxxx');
+    }
+
+    public function methodWherePredictionSetsVaryHeaderOnReturnedResponsePrediction()
+    {
+        return response('expected')->header('Vary', 'X-Inertia');
     }
 
     public function checkPrecogMacroPrediction()
