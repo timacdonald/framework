@@ -25,10 +25,9 @@ trait ValidatesRequests
         $request = $request ?: request();
 
         if (is_array($validator)) {
-            $validator = $this->getValidationFactory()->make(
-                $request->all(),
-                $request->precognitive() ? app('precognitive.ruleResolver')($validator) : $validator
-            );
+            $rules = $request->precognitive() ? app('precognitive.ruleResolver')($validator) : $validator;
+
+            $validator = $this->getValidationFactory()->make($request->all(), $rules);
         }
 
         return $validator->validate();
@@ -48,11 +47,10 @@ trait ValidatesRequests
     public function validate(Request $request, array $rules,
                              array $messages = [], array $customAttributes = [])
     {
+        $rules = $request->precognitive() ? app('precognitive.ruleResolver')($rules) : $rules;
+
         return $this->getValidationFactory()->make(
-            $request->all(),
-            $request->precognitive() ? app('precognitive.ruleResolver')($rules) : $rules,
-            $messages,
-            $customAttributes
+            $request->all(), $messages, $customAttributes
         )->validate();
     }
 
