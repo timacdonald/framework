@@ -50,7 +50,7 @@ trait ValidatesRequests
         $rules = $request->precognitive() ? app('precognitive.ruleResolver')($rules) : $rules;
 
         return $this->getValidationFactory()->make(
-            $request->all(), $messages, $customAttributes
+            $request->all(), $rules, $messages, $customAttributes
         )->validate();
     }
 
