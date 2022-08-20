@@ -41,11 +41,7 @@ class PrecognitiveControllerDispatcher extends ControllerDispatcher
      */
     public function dispatch(Route $route, $controller, $method)
     {
-        if (! method_exists($controller, $method)) {
-            $class = $controller::class;
-
-            throw new RuntimeException("Attempting to predict the outcome of the [{$class}::{$method}()] method but it is not defined.");
-        }
+        $this->ensureMethodExists($controller, $method);
 
         $arguments = $this->resolveArguments($route, $controller, $method);
 
@@ -76,4 +72,22 @@ class PrecognitiveControllerDispatcher extends ControllerDispatcher
             }
         });
    }
+
+    /**
+     * Ensure that the method exists on the controller.
+     *
+     * @param  object  $controller
+     * @param  string  $method
+     * @return void
+     */
+    protected function ensureMethodExists($controller, $method)
+    {
+        if (method_exists($controller, $method)) {
+            return;
+        }
+
+        $class = $controller::class;
+
+        throw new RuntimeException("Attempting to predict the outcome of the [{$class}::{$method}()] method but it is not defined.");
+    }
 }
