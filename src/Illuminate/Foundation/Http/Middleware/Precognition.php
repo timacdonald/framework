@@ -5,11 +5,11 @@ namespace Illuminate\Foundation\Http\Middleware;
 use Closure;
 use Illuminate\Container\Container;
 use Illuminate\Contracts\Routing\ResponseFactory;
+use Illuminate\Foundation\Routing\PrecognitiveCallableDispatcher;
+use Illuminate\Foundation\Routing\PrecognitiveControllerDispatcher;
 use Illuminate\Http\Response;
 use Illuminate\Routing\Contracts\CallableDispatcher;
 use Illuminate\Routing\Contracts\ControllerDispatcher;
-use Illuminate\Foundation\Routing\PrecognitiveCallableDispatcher;
-use Illuminate\Foundation\Routing\PrecognitiveControllerDispatcher;
 use Illuminate\Support\Collection;
 
 class Precognition
