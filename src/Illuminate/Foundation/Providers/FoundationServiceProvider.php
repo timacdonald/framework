@@ -76,10 +76,8 @@ class FoundationServiceProvider extends AggregateServiceProvider
     public function registerRequestValidation()
     {
         Request::macro('validate', function (array $rules, ...$params) {
-            if ($this->precognitive() && $this->headers->has('Precognition-Validate-Only')) {
-                $rules = Collection::make($rules)
-                    ->only(explode(',', $this->header('Precognition-Validate-Only')))
-                    ->all();
+            if ($this->precognitive()) {
+                $rules = app('precognitive.ruleResolver')($this, $rules);
             }
 
             return validator()->validate($this->all(), $rules, ...$params);

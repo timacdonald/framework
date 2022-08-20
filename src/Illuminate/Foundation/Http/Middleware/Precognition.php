@@ -10,6 +10,7 @@ use Illuminate\Routing\Contracts\CallableDispatcher;
 use Illuminate\Routing\Contracts\ControllerDispatcher;
 use Illuminate\Foundation\Routing\PrecognitiveCallableDispatcher;
 use Illuminate\Foundation\Routing\PrecognitiveControllerDispatcher;
+use Illuminate\Support\Collection;
 
 class Precognition
 {
@@ -73,6 +74,16 @@ class Precognition
             ControllerDispatcher::class,
             fn ($app) => new PrecognitiveControllerDispatcher($app, fn () => $this->onEmptyResponse($request))
         );
+
+        $this->container->instance('precognitive.ruleResolver', function ($request, $rules) {
+            if (! $request->headers->has('Precognition-Validate-Only')) {
+                return $rules;
+            }
+
+            return Collection::make($rules)
+                ->only(explode(',', $request->header('Precognition-Validate-Only')))
+                ->all();
+        });
     }
 
     /**

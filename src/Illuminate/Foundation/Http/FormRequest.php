@@ -124,13 +124,13 @@ class FormRequest extends Request implements ValidatesWhenResolved
      */
     protected function resolveRules()
     {
-        if (! $this->precognitive() || ! $this->headers->has('Precognition-Validate-Only')) {
+        if (! $this->precognitive()) {
             return $this->container->call([$this, 'rules']);
         }
 
-        return Collection::make($this->container->call([$this, 'rules']))
-            ->only(explode(',', $this->header('Precognition-Validate-Only')))
-            ->all();
+        return $this->container['precognitive.ruleResolver'](
+            $this, $this->container->call([$this, 'rules'])
+        );
     }
 
     /**

@@ -47,8 +47,8 @@ trait ValidatesRequests
     public function validate(Request $request, array $rules,
                              array $messages = [], array $customAttributes = [])
     {
-        if (in_array(PredictsOutcomes::class, class_uses_recursive($this))) {
-            $rules = $this->resolveRules($rules, $request);
+        if ($request->precognitive()) {
+            $rules = app('precognitive.ruleResolver')($request, $rules);
         }
 
         return $this->getValidationFactory()->make(

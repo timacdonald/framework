@@ -84,15 +84,11 @@ trait PredictsOutcomes
      */
     protected function resolveRules($rules, $request = null)
     {
-        $request ??= request();
-
-        if (! $request->precognitive() || ! $request->headers->has('Precognition-Validate-Only')) {
+        if (! ($request ??= request())->precognitive()) {
             return $rules;
         }
 
-        return Collection::make($rules)
-            ->only(explode(',', $request->header('Precognition-Validate-Only')))
-            ->all();
+        return app('preconitive.resolveRules')($request, $rules);
     }
 
     /**
