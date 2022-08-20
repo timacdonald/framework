@@ -3,7 +3,6 @@
 namespace Illuminate\Foundation\Validation;
 
 use Illuminate\Contracts\Validation\Factory;
-use Illuminate\Foundation\Routing\PredictsOutcomes;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 

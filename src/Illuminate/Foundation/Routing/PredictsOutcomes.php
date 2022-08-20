@@ -3,12 +3,8 @@
 namespace Illuminate\Foundation\Routing;
 
 use Illuminate\Http\Exceptions\HttpResponseException;
-use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Response;
 use Illuminate\Routing\Router;
-use Illuminate\Support\Collection;
 use Illuminate\Validation\Rule;
-use RuntimeException;
 
 trait PredictsOutcomes
 {
