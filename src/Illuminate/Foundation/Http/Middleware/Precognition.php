@@ -119,8 +119,12 @@ class Precognition
      */
     protected function withResponse($request, $response)
     {
-        return $response
-            ->header('Precognition', 'true')
-            ->header('Vary', 'Precognition', false);
+        return $response->withHeaders([
+            'Precognition' => 'true',
+            'Vary' => implode(', ', array_filter([
+                $response->headers->get('Vary'),
+                'Precognition',
+            ])),
+        ]);
     }
 }
