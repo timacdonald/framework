@@ -123,11 +123,9 @@ class FormRequest extends Request implements ValidatesWhenResolved
      */
     protected function resolveRules()
     {
-        if (! $this->precognitive()) {
-            return $this->container->call([$this, 'rules']);
-        }
-
-        return $this->container['precognitive.ruleResolver']($this->container->call([$this, 'rules']));
+        return $this->precognitive()
+            ? $this->container['precognitive.ruleResolver']($this->container->call([$this, 'rules']))
+            : $this->container->call([$this, 'rules']);
     }
 
     /**
