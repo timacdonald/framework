@@ -110,22 +110,14 @@ class FormRequest extends Request implements ValidatesWhenResolved
      */
     protected function createDefaultValidator(ValidationFactory $factory)
     {
-        return $factory->make(
-            $this->validationData(), $this->resolveRules(),
-            $this->messages(), $this->attributes()
-        )->stopOnFirstFailure($this->stopOnFirstFailure);
-    }
-
-    /**
-     * The rules to validate against.
-     *
-     * @return array
-     */
-    protected function resolveRules()
-    {
-        return $this->precognitive()
+        $rules = $this->precognitive()
             ? $this->container['precognitive.ruleResolver']($this->container->call([$this, 'rules']))
             : $this->container->call([$this, 'rules']);
+
+        return $factory->make(
+            $this->validationData(), $rules,
+            $this->messages(), $this->attributes()
+        )->stopOnFirstFailure($this->stopOnFirstFailure);
     }
 
     /**
