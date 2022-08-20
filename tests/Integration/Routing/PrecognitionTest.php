@@ -446,6 +446,7 @@ class PrecognitionTest extends TestCase
         ]);
 
         $response->assertStatus(500);
+        $this->assertSame('Attempting to predict the outcome of the [Illuminate\\Tests\\Integration\\Routing\\PrecognitionTestController::undefinedMethod()] method but it is not defined.', $response->exception->getMessage());
     }
 }
 

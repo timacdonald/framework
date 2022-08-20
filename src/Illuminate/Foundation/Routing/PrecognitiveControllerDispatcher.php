@@ -59,7 +59,9 @@ class PrecognitiveControllerDispatcher extends ControllerDispatcher
     protected function controllerPrediction($route, $controller, $method, $arguments)
     {
         if (! method_exists($controller, $method)) {
-            $controller->{$method}();
+            $class = $controller::class;
+
+            throw new RuntimeException("Attempting to predict the outcome of the [{$class}::{$method}()] method but it is not defined.");
         }
 
         $method .= 'Prediction';
