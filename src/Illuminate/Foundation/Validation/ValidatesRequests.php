@@ -3,6 +3,7 @@
 namespace Illuminate\Foundation\Validation;
 
 use Illuminate\Contracts\Validation\Factory;
+use Illuminate\Foundation\Routing\PredictsOutcomes;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 
@@ -19,6 +20,10 @@ trait ValidatesRequests
      */
     public function validateWith($validator, Request $request = null)
     {
+        // TODO: should precognition do anything here? Kinda feels more explicit.
+        // Maybe if you are passing in an array, then we do filter the rules, but
+        // if you pass in a validator, than we don't. Not sure about this one.
+
         $request = $request ?: request();
 
         if (is_array($validator)) {
@@ -42,6 +47,10 @@ trait ValidatesRequests
     public function validate(Request $request, array $rules,
                              array $messages = [], array $customAttributes = [])
     {
+        if (in_array(PredictsOutcomes::class, class_uses_recursive($this))) {
+            $rules = $this->resolveRules($rules, $request);
+        }
+
         return $this->getValidationFactory()->make(
             $request->all(), $rules, $messages, $customAttributes
         )->validate();

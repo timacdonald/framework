@@ -9,6 +9,7 @@ use Illuminate\Foundation\Vite;
 use Illuminate\Http\Request;
 use Illuminate\Log\Events\MessageLogged;
 use Illuminate\Support\AggregateServiceProvider;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Testing\LoggedExceptionCollection;
 use Illuminate\Testing\ParallelTestingServiceProvider;
@@ -75,6 +76,12 @@ class FoundationServiceProvider extends AggregateServiceProvider
     public function registerRequestValidation()
     {
         Request::macro('validate', function (array $rules, ...$params) {
+            if ($this->precognitive() && $this->headers->has('Precognition-Validate-Only')) {
+                $rules = Collection::make($rules)
+                    ->only(explode(',', $this->header('Precognition-Validate-Only')))
+                    ->all();
+            }
+
             return validator()->validate($this->all(), $rules, ...$params);
         });
 

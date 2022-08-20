@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Foundation\Http\Middleware\Precognition;
 use Illuminate\Foundation\Routing\PredictsOutcomes;
+use Illuminate\Foundation\Validation\ValidatesRequests;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Gate;
@@ -300,6 +301,110 @@ class PrecognitionTest extends TestCase
         $response->assertHeaderMissing('Precognition');
     }
 
+    public function testClientCanSpecifyInputsToValidateWhenUsingControllerValidate()
+    {
+        Route::post('test-route', [PrecognitionTestController::class, 'testControllerValidateFiltering'])
+            ->middleware([Precognition::class]);
+
+        $response = $this->postJson('test-route', [
+            'always' => 'foo',
+            'sometimes_1' => 'foo',
+            'sometimes_2' => 'foo',
+            'whenNotPrecognitive' => 'foo',
+        ], [
+            'Precognition' => 'true',
+            'Precognition-Validate-Only' => 'sometimes_1,sometimes_2',
+        ]);
+
+        $response->assertStatus(422);
+        $response->assertJsonPath('errors', [
+            'sometimes_1' => [
+                'The sometimes 1 must be an integer.'
+            ],
+            'sometimes_2' => [
+                'The sometimes 2 must be an integer.'
+            ]
+        ]);
+    }
+
+    public function testClientCanSpecifyInputsToValidateWhenUsingControllerValidateWithBag()
+    {
+        Route::post('test-route', [PrecognitionTestController::class, 'testControllerValidateWithBagFiltering'])
+            ->middleware([Precognition::class]);
+
+        $response = $this->postJson('test-route', [
+            'always' => 'foo',
+            'sometimes_1' => 'foo',
+            'sometimes_2' => 'foo',
+            'whenNotPrecognitive' => 'foo',
+        ], [
+            'Precognition' => 'true',
+            'Precognition-Validate-Only' => 'sometimes_1,sometimes_2',
+        ]);
+
+        $response->assertStatus(422);
+        $response->assertJsonPath('errors', [
+            'sometimes_1' => [
+                'The sometimes 1 must be an integer.'
+            ],
+            'sometimes_2' => [
+                'The sometimes 2 must be an integer.'
+            ]
+        ]);
+    }
+
+    public function testClientCanSpecifyInputsToValidateWhenUsingRequestValidate()
+    {
+        Route::post('test-route', [PrecognitionTestController::class, 'testRequestValidateFiltering'])
+            ->middleware([Precognition::class]);
+
+        $response = $this->postJson('test-route', [
+            'always' => 'foo',
+            'sometimes_1' => 'foo',
+            'sometimes_2' => 'foo',
+            'whenNotPrecognitive' => 'foo',
+        ], [
+            'Precognition' => 'true',
+            'Precognition-Validate-Only' => 'sometimes_1,sometimes_2',
+        ]);
+
+        $response->assertStatus(422);
+        $response->assertJsonPath('errors', [
+            'sometimes_1' => [
+                'The sometimes 1 must be an integer.'
+            ],
+            'sometimes_2' => [
+                'The sometimes 2 must be an integer.'
+            ]
+        ]);
+    }
+
+    public function testClientCanSpecifyInputsToValidateWhenUsingRequestValidateWithBag()
+    {
+        Route::post('test-route', [PrecognitionTestController::class, 'testRequestValidateWithBagFiltering'])
+            ->middleware([Precognition::class]);
+
+        $response = $this->postJson('test-route', [
+            'always' => 'foo',
+            'sometimes_1' => 'foo',
+            'sometimes_2' => 'foo',
+            'whenNotPrecognitive' => 'foo',
+        ], [
+            'Precognition' => 'true',
+            'Precognition-Validate-Only' => 'sometimes_1,sometimes_2',
+        ]);
+
+        $response->assertStatus(422);
+        $response->assertJsonPath('errors', [
+            'sometimes_1' => [
+                'The sometimes 1 must be an integer.'
+            ],
+            'sometimes_2' => [
+                'The sometimes 2 must be an integer.'
+            ]
+        ]);
+    }
+
     public function testItAppendsAnAdditionalVaryHeaderInsteadOfReplacingAnyExistingHeaders()
     {
         $this->markTestSkipped('Need to check this is valid. Perhaps is should be comma seperated.');
@@ -308,7 +413,7 @@ class PrecognitionTest extends TestCase
 
 class PrecognitionTestController
 {
-    use PredictsOutcomes;
+    use PredictsOutcomes, ValidatesRequests;
 
     public function updatePrediction()
     {
@@ -429,6 +534,66 @@ class PrecognitionTestController
     public function testCanPassToOutcomeMultilpleTimes()
     {
         return $this->resolvePrediction();
+    }
+
+    public function testControllerValidateFilteringPrediction($request)
+    {
+        $this->validate($request, [
+            'always' => 'integer',
+            'whenNotPrecognitive' => $this->whenNotPrecognitive('integer'),
+            'sometimes_1' => 'integer',
+            'sometimes_2' => 'integer',
+        ]);
+    }
+
+    public function testControllerValidateFiltering(Request $request)
+    {
+        throw new Exception('xxxx');
+    }
+
+    public function testControllerValidateWithBagFilteringPrediction($request)
+    {
+        $this->validateWithBag('custom-bag', $request, [
+            'always' => 'integer',
+            'whenNotPrecognitive' => $this->whenNotPrecognitive('integer'),
+            'sometimes_1' => 'integer',
+            'sometimes_2' => 'integer',
+        ]);
+    }
+
+    public function testControllerValidateWithBagFiltering(Request $request)
+    {
+        throw new Exception('xxxx');
+    }
+
+    public function testRequestValidateFilteringPrediction($request)
+    {
+        $request->validate([
+            'always' => 'integer',
+            'whenNotPrecognitive' => $this->whenNotPrecognitive('integer'),
+            'sometimes_1' => 'integer',
+            'sometimes_2' => 'integer',
+        ]);
+    }
+
+    public function testRequestValidateFiltering(Request $request)
+    {
+        throw new Exception('xxxx');
+    }
+
+    public function testRequestValidateWithBagFilteringPrediction($request)
+    {
+        $request->validateWithBag('custom-bag', [
+            'always' => 'integer',
+            'whenNotPrecognitive' => $this->whenNotPrecognitive('integer'),
+            'sometimes_1' => 'integer',
+            'sometimes_2' => 'integer',
+        ]);
+    }
+
+    public function testRequestValidateWithBagFiltering(Request $request)
+    {
+        throw new Exception('xxxx');
     }
 }
 

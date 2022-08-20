@@ -6,6 +6,8 @@ use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Response;
 use Illuminate\Routing\Router;
+use Illuminate\Support\Collection;
+use Illuminate\Validation\Rule;
 use RuntimeException;
 
 trait PredictsOutcomes
@@ -69,7 +71,39 @@ trait PredictsOutcomes
         $this->clearOutcomePayload();
 
         throw new HttpResponseException(
-            Router::toResponse($request ?? app('request'), $response)
+            Router::toResponse($request ?? request(), $response)
         );
+    }
+
+    /**
+     * Resolve the validation rules.
+     *
+     * @param  array  $rules
+     * @param  null|\Illuminate\Http\Request  $request
+     * @return array
+     */
+    protected function resolveRules($rules, $request = null)
+    {
+        $request ??= request();
+
+        if (! $request->precognitive() || ! $request->headers->has('Precognition-Validate-Only')) {
+            return $rules;
+        }
+
+        return Collection::make($rules)
+            ->only(explode(',', $request->header('Precognition-Validate-Only')))
+            ->all();
+    }
+
+    /**
+     * Apply validation rules only when the request is not precognitive.
+     *
+     * @param  mixed  $rule
+     * @param null|\Illuminate\Http\Request  $request
+     * @return \Illuminate\Validation\ConditionalRules
+     */
+    protected function whenNotPrecognitive($rule, $request = null)
+    {
+        return Rule::when(! ($request ??= request())->precognitive(), $rule);
     }
 }
