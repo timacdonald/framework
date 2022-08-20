@@ -67,7 +67,7 @@ class Precognition
 
         $this->container->singleton(
             'precognitive.ruleResolver',
-            fn () => fn ($rules) => $this->resolveValidationRules($request, $rules)
+            fn () => fn ($rules, $r = null) => $this->resolveValidationRules($r ?? $request, $rules)
         );
 
         $this->container->singleton(
