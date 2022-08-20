@@ -435,6 +435,18 @@ class PrecognitionTest extends TestCase
     {
         $this->markTestSkipped('Need to check this is valid. Perhaps is should be comma seperated.');
     }
+
+    public function testPrecognitionForControllerMethodThatDoesntExist()
+    {
+        Route::post('test-route', [PrecognitionTestController::class, 'undefinedMethod'])
+            ->middleware([Precognition::class]);
+
+        $response = $this->postJson('test-route', [], [
+            'Precognition' => 'true',
+        ]);
+
+        $response->assertStatus(500);
+    }
 }
 
 class PrecognitionTestController
