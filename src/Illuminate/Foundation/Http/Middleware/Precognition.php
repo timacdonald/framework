@@ -66,6 +66,11 @@ class Precognition
         $request->attributes->set('precognitive', true);
 
         $this->container->singleton(
+            'precognitive.ruleResolver',
+            fn ($app) => fn ($rules) => $this->resolveValidationRules($request, $rules)
+        );
+
+        $this->container->singleton(
             CallableDispatcher::class,
             fn ($app) => new PrecognitiveCallableDispatcher($app, fn () => $this->onEmptyResponse($request))
         );
@@ -74,16 +79,6 @@ class Precognition
             ControllerDispatcher::class,
             fn ($app) => new PrecognitiveControllerDispatcher($app, fn () => $this->onEmptyResponse($request))
         );
-
-        $this->container->instance('precognitive.ruleResolver', function ($request, $rules) {
-            if (! $request->headers->has('Precognition-Validate-Only')) {
-                return $rules;
-            }
-
-            return Collection::make($rules)
-                ->only(explode(',', $request->header('Precognition-Validate-Only')))
-                ->all();
-        });
     }
 
     /**
@@ -95,6 +90,24 @@ class Precognition
     protected function onEmptyResponse($request)
     {
         return $this->container[ResponseFactory::class]->make('', Response::HTTP_NO_CONTENT);
+    }
+
+    /**
+     * Resolve the validation rules for a Precognitive request.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @param  array  $rules
+     * @return array
+     */
+    protected function resolveValidationRules($request, $rules)
+    {
+        if (! $request->headers->has('Precognition-Validate-Only')) {
+            return $rules;
+        }
+
+        return Collection::make($rules)
+            ->only(explode(',', $request->header('Precognition-Validate-Only')))
+            ->all();
     }
 
     /**

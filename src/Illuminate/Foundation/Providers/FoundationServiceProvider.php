@@ -76,11 +76,11 @@ class FoundationServiceProvider extends AggregateServiceProvider
     public function registerRequestValidation()
     {
         Request::macro('validate', function (array $rules, ...$params) {
-            if ($this->precognitive()) {
-                $rules = app('precognitive.ruleResolver')($this, $rules);
-            }
-
-            return validator()->validate($this->all(), $rules, ...$params);
+            return validator()->validate(
+                $this->all(),
+                $this->precognitive() ? app('precognitive.ruleResolver')($rules) : $rules,
+                ...$params
+            );
         });
 
         Request::macro('validateWithBag', function (string $errorBag, array $rules, ...$params) {
