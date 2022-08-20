@@ -76,22 +76,6 @@ trait PredictsOutcomes
     }
 
     /**
-     * Resolve the validation rules.
-     *
-     * @param  array  $rules
-     * @param  null|\Illuminate\Http\Request  $request
-     * @return array
-     */
-    protected function resolveRules($rules, $request = null)
-    {
-        if (! ($request ??= request())->precognitive()) {
-            return $rules;
-        }
-
-        return app('preconitive.resolveRules')($request, $rules);
-    }
-
-    /**
      * Apply validation rules only when the request is not precognitive.
      *
      * @param  mixed  $rule
