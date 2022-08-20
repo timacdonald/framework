@@ -405,6 +405,32 @@ class PrecognitionTest extends TestCase
         ]);
     }
 
+    public function testClientCanSpecifyInputsToValidateWhenUsingControllerValidateWithPassingArrayOfRules()
+    {
+        Route::post('test-route', [PrecognitionTestController::class, 'testControllerValidateWithPassingArrayOfRulesFiltering'])
+            ->middleware([Precognition::class]);
+
+        $response = $this->postJson('test-route', [
+            'always' => 'foo',
+            'sometimes_1' => 'foo',
+            'sometimes_2' => 'foo',
+            'whenNotPrecognitive' => 'foo',
+        ], [
+            'Precognition' => 'true',
+            'Precognition-Validate-Only' => 'sometimes_1,sometimes_2',
+        ]);
+
+        $response->assertStatus(422);
+        $response->assertJsonPath('errors', [
+            'sometimes_1' => [
+                'The sometimes 1 must be an integer.'
+            ],
+            'sometimes_2' => [
+                'The sometimes 2 must be an integer.'
+            ]
+        ]);
+    }
+
     public function testItAppendsAnAdditionalVaryHeaderInsteadOfReplacingAnyExistingHeaders()
     {
         $this->markTestSkipped('Need to check this is valid. Perhaps is should be comma seperated.');
@@ -592,6 +618,21 @@ class PrecognitionTestController
     }
 
     public function testRequestValidateWithBagFiltering(Request $request)
+    {
+        throw new Exception('xxxx');
+    }
+
+    public function testControllerValidateWithPassingArrayOfRulesFilteringPrediction($request)
+    {
+        $this->validateWith([
+            'always' => 'integer',
+            'whenNotPrecognitive' => $this->whenNotPrecognitive('integer'),
+            'sometimes_1' => 'integer',
+            'sometimes_2' => 'integer',
+        ]);
+    }
+
+    public function testControllerValidateWithPassingArrayOfRulesFiltering(Request $request)
     {
         throw new Exception('xxxx');
     }

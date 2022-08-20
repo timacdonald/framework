@@ -19,14 +19,17 @@ trait ValidatesRequests
      */
     public function validateWith($validator, Request $request = null)
     {
-        // TODO: should precognition do anything here? Kinda feels more explicit.
-        // Maybe if you are passing in an array, then we do filter the rules, but
-        // if you pass in a validator, than we don't. Not sure about this one.
+        // TODO: should precognition do anything here when passing a validator
+        // instance? Kinda feels more explicit. Not sure on this one.
 
         $request = $request ?: request();
 
         if (is_array($validator)) {
-            $validator = $this->getValidationFactory()->make($request->all(), $validator);
+            $rules = $request->precognitive()
+                ? app('precognitive.ruleResolver')($request, $validator)
+                : $validator;
+
+            $validator = $this->getValidationFactory()->make($request->all(), $rules);
         }
 
         return $validator->validate();
