@@ -36,12 +36,12 @@ class Precognition
     public function handle($request, Closure $next)
     {
         if (! $this->isAttemptingPrecognition($request)) {
-            return $next($request);
+            return $this->appendVaryHeader($request, $next($request));
         }
 
         $this->prepareForPrecognition($request);
 
-        return $this->withResponse($request, $next($request));
+        return $this->withPrecognitiveResponse($request, $next($request));
     }
 
     /**
@@ -111,20 +111,29 @@ class Precognition
     }
 
     /**
-     * Customize the response for a precognitive request.
+     * Customize the response.
      *
      * @param  \Illuminate\Http\Request  $request
      * @param  \Illuminate\Http\Response  $response
      * @return \Illuminate\Http\Response
      */
-    protected function withResponse($request, $response)
+    protected function withPrecognitiveResponse($request, $response)
     {
-        return $response->withHeaders([
-            'Precognition' => 'true',
-            'Vary' => implode(', ', array_filter([
-                $response->headers->get('Vary'),
-                'Precognition',
-            ])),
-        ]);
+        return $this->appendVaryHeader($request, $response->header('Precognition', 'true'));
+    }
+
+    /**
+     * Append the "Vary" header to the response.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @param  \Illuminate\Http\Response  $response
+     * @return \Illuminate\Http\Response
+     */
+    protected function appendVaryHeader($request, $response)
+    {
+        return $response->header('Vary', implode(', ', array_filter([
+            $response->headers->get('Vary'),
+            'Precognition',
+        ])));
     }
 }

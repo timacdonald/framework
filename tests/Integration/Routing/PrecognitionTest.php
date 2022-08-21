@@ -413,7 +413,18 @@ class PrecognitionTest extends TestCase
                 'The input with spaces must be an integer.',
             ],
         ]);
+    }
 
+    public function testVaryHeaderIsAppliedToNonPrecognitionResponses()
+    {
+        Route::get('test-route', fn () => 'ok')
+            ->middleware(Precognition::class);
+
+        $response = $this->get('test-route');
+
+        $response->assertOk();
+        $this->assertSame('ok', $response->content());
+        $response->assertHeader('Vary', 'Precognition');
     }
 }
 
