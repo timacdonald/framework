@@ -30,7 +30,7 @@ class Precognition
      *
      * @param  \Illuminate\Http\Request  $request
      * @param  \Closure  $next
-     * @return mixed
+     * @return \Illuminate\Http\Response
      */
     public function handle($request, $next)
     {

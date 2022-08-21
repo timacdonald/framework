@@ -3,13 +3,11 @@
 namespace Illuminate\Foundation\Providers;
 
 use Illuminate\Contracts\Foundation\MaintenanceMode as MaintenanceModeContract;
-use Illuminate\Contracts\Routing\ResponseFactory;
 use Illuminate\Foundation\MaintenanceModeManager;
 use Illuminate\Foundation\Vite;
 use Illuminate\Http\Request;
 use Illuminate\Log\Events\MessageLogged;
 use Illuminate\Support\AggregateServiceProvider;
-use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Testing\LoggedExceptionCollection;
 use Illuminate\Testing\ParallelTestingServiceProvider;
