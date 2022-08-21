@@ -3,6 +3,7 @@
 namespace Illuminate\Foundation\Providers;
 
 use Illuminate\Contracts\Foundation\MaintenanceMode as MaintenanceModeContract;
+use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Foundation\MaintenanceModeManager;
 use Illuminate\Foundation\Vite;
 use Illuminate\Http\Request;
@@ -159,5 +160,33 @@ class FoundationServiceProvider extends AggregateServiceProvider
     protected function registerPrecognition()
     {
         Request::macro('precognitive', fn () => $this->attributes->get('precognitive', false));
+
+        Request::macro('withPrecognitiveClientRuleFiltering', function () {
+            if ($this instanceof FormRequest && property_exists($this, 'precognitiveClientRuleFiltering')) {
+                $this->precognitiveClientRuleFiltering = true;
+            } else {
+                $this->attributes->set('precognitive.clientRuleFiltering', true);
+            }
+
+             return $this;
+        });
+
+        Request::macro('withoutPrecognitiveClientRuleFiltering', function () {
+            if ($this instanceof FormRequest && property_exists($this, 'precognitiveClientRuleFiltering')) {
+                $this->precognitiveClientRuleFiltering = false;
+            } else {
+                $this->attributes->set('precognitive.clientRuleFiltering', false);
+            }
+
+             return $this;
+        });
+
+        Request::macro('precognitiveClientRuleFiltering', function () {
+            if ($this instanceof FormRequest && property_exists($this, 'precognitiveClientRuleFiltering')) {
+                return $this->precognitiveClientRuleFiltering;
+            } else {
+                return $this->attributes->get('precognitive.clientRuleFiltering', false);
+            }
+        });
     }
 }

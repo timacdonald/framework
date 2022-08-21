@@ -121,10 +121,38 @@ class PrecognitionTest extends TestCase
         ]);
     }
 
-    public function testClientCanSpecifyInputToValidate()
+    public function testClientCannotSpecifyInputToValidateWithoutServerExplicitlyAllowing()
     {
         Route::post('test-route', fn (PrecognitionTestRequest $request) => fail())
             ->middleware(Precognition::class);
+
+        $response = $this->postJson('test-route', [
+            // 'required_integer' => 'foo',
+            'optional_integer_1' => 'foo',
+            'optional_integer_2' => 'foo',
+        ], [
+            'Precognition' => 'true',
+            'Precognition-Validate-Only' => 'optional_integer_1,optional_integer_2',
+        ]);
+
+        $response->assertStatus(422);
+        $response->assertJsonPath('errors', [
+            'required_integer' => [
+                'The required integer field is required.',
+            ],
+            'optional_integer_1' => [
+                'The optional integer 1 must be an integer.',
+            ],
+            'optional_integer_2' => [
+                'The optional integer 2 must be an integer.',
+            ],
+        ]);
+    }
+
+    public function testClientCanSpecifyInputToValidate()
+    {
+        Route::post('test-route', fn (PrecognitionTestRequest $request) => fail())
+            ->middleware(PrecognitionAllowingClientValidationFilter::class);
 
         $response = $this->postJson('test-route', [
             // 'required_integer' => 'foo',
@@ -149,7 +177,7 @@ class PrecognitionTest extends TestCase
     public function testClientCanSpecifyNoInputsToValidate()
     {
         Route::post('test-route', fn (PrecognitionTestRequest $request) => fail())
-            ->middleware(Precognition::class);
+            ->middleware(PrecognitionAllowingClientValidationFilter::class);
 
         $response = $this->postJson('test-route', [
             // 'required_integer' => 'foo',
@@ -349,7 +377,7 @@ class PrecognitionTest extends TestCase
     public function testClientCanSpecifyInputsToValidateWhenUsingControllerValidateWithPassingArrayOfRules()
     {
         Route::post('test-route', [PrecognitionTestController::class, 'methodWherePredicitionValidatesViaControllerValidateWith'])
-            ->middleware(Precognition::class);
+            ->middleware(PrecognitionAllowingClientValidationFilter::class);
 
         $response = $this->postJson('test-route', [
             // 'required_integer' => 'foo',
@@ -398,7 +426,7 @@ class PrecognitionTest extends TestCase
     public function testSpacesAreImportantInValidationFilterLogicForJsonRequests()
     {
         Route::post('test-route', fn (PrecognitionTestRequest $request) => fail())
-            ->middleware(Precognition::class);
+            ->middleware(PrecognitionAllowingClientValidationFilter::class);
 
         $response = $this->postJson('test-route', [
             ' input with spaces ' => 'foo',
@@ -425,6 +453,49 @@ class PrecognitionTest extends TestCase
         $response->assertOk();
         $this->assertSame('ok', $response->content());
         $response->assertHeader('Vary', 'Precognition');
+    }
+
+    public function testRequestClientFilteringMacros()
+    {
+        $request = Request::create('http://example.com');
+        $this->assertFalse($request->precognitiveClientRuleFiltering());
+        $this->assertNull($request->attributes->get('precognitive.clientRuleFiltering'));
+        $request->withPrecognitiveClientRuleFiltering();
+        $this->assertTrue($request->precognitiveClientRuleFiltering());
+        $this->assertTrue($request->attributes->get('precognitive.clientRuleFiltering'));
+        $request->withoutPrecognitiveClientRuleFiltering();
+        $this->assertFalse($request->precognitiveClientRuleFiltering());
+        $this->assertFalse($request->attributes->get('precognitive.clientRuleFiltering'));
+
+        $request = PrecognitionTestRequest::create('http://example.com');
+        $this->assertFalse($request->precognitiveClientRuleFiltering());
+        $this->assertNull($request->attributes->get('precognitive.clientRuleFiltering'));
+        $request->withPrecognitiveClientRuleFiltering();
+        $this->assertTrue($request->precognitiveClientRuleFiltering());
+        $this->assertTrue($request->attributes->get('precognitive.clientRuleFiltering'));
+        $request->withoutPrecognitiveClientRuleFiltering();
+        $this->assertFalse($request->precognitiveClientRuleFiltering());
+        $this->assertFalse($request->attributes->get('precognitive.clientRuleFiltering'));
+
+        $request = PrecognitionTestRequestOptingIntoClientFiltering::create('http://example.com');
+        $this->assertTrue($request->precognitiveClientRuleFiltering());
+        $this->assertNull($request->attributes->get('precognitive.clientRuleFiltering'));
+        $request->withoutPrecognitiveClientRuleFiltering();
+        $this->assertFalse($request->precognitiveClientRuleFiltering());
+        $this->assertNull($request->attributes->get('precognitive.clientRuleFiltering'));
+        $request->withPrecognitiveClientRuleFiltering();
+        $this->assertTrue($request->precognitiveClientRuleFiltering());
+        $this->assertNull($request->attributes->get('precognitive.clientRuleFiltering'));
+
+        $request = PrecognitionTestRequestOptingOutOfClientFiltering::create('http://example.com');
+        $this->assertFalse($request->precognitiveClientRuleFiltering());
+        $this->assertNull($request->attributes->get('precognitive.clientRuleFiltering'));
+        $request->withPrecognitiveClientRuleFiltering();
+        $this->assertTrue($request->precognitiveClientRuleFiltering());
+        $this->assertNull($request->attributes->get('precognitive.clientRuleFiltering'));
+        $request->withoutPrecognitiveClientRuleFiltering();
+        $this->assertFalse($request->precognitiveClientRuleFiltering());
+        $this->assertNull($request->attributes->get('precognitive.clientRuleFiltering'));
     }
 }
 
@@ -521,7 +592,7 @@ class PrecognitionTestController
 
     public function methodWherePredicitionValidatesViaControllerValidatePrediction($request)
     {
-        $this->validate($request, [
+        $this->validate($request->withPrecognitiveClientRuleFiltering(), [
             'required_integer' => 'required|integer',
             'required_integer_when_not_precognitive' => $this->whenNotPrecognitive('required|integer'),
             'optional_integer_1' => 'integer',
@@ -536,7 +607,7 @@ class PrecognitionTestController
 
     public function methodWherePredicitionValidatesViaControllerValidateWithBagPrediction($request)
     {
-        $this->validateWithBag('custom-bag', $request, [
+        $this->validateWithBag('custom-bag', $request->withPrecognitiveClientRuleFiltering(), [
             'required_integer' => 'required|integer',
             'required_integer_when_not_precognitive' => $this->whenNotPrecognitive('required|integer'),
             'optional_integer_1' => 'integer',
@@ -551,7 +622,7 @@ class PrecognitionTestController
 
     public function methodWherePredicitionValidatesViaRequestValidatePrediction($request)
     {
-        $request->validate([
+        $request->withPrecognitiveClientRuleFiltering()->validate([
             'required_integer' => 'required|integer',
             'required_integer_when_not_precognitive' => $this->whenNotPrecognitive('required|integer'),
             'optional_integer_1' => 'integer',
@@ -566,7 +637,7 @@ class PrecognitionTestController
 
     public function methodWherePredicitionValidatesViaRequestValidateWithBagPrediction($request)
     {
-        $request->validateWithBag('custom-bag', [
+        $request->withPrecognitiveClientRuleFiltering()->validateWithBag('custom-bag', [
             'required_integer' => 'required|integer',
             'required_integer_when_not_precognitive' => $this->whenNotPrecognitive('required|integer'),
             'optional_integer_1' => 'integer',
@@ -607,4 +678,24 @@ class PrecognitionTestRequest extends FormRequest
             ' input with spaces ' => 'integer',
         ];
     }
+}
+
+class PrecognitionAllowingClientValidationFilter extends Precognition
+{
+    public function prepareForPrecognition($request)
+    {
+        parent::prepareForPrecognition($request);
+
+        $request->withPrecognitiveClientRuleFiltering();
+    }
+}
+
+class PrecognitionTestRequestOptingIntoClientFiltering extends FormRequest
+{
+    protected $precognitiveClientRuleFiltering = true;
+}
+
+class PrecognitionTestRequestOptingOutOfClientFiltering extends FormRequest
+{
+    protected $precognitiveClientRuleFiltering = false;
 }

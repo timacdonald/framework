@@ -4,6 +4,7 @@ namespace Illuminate\Foundation\Http\Middleware;
 
 use Illuminate\Container\Container;
 use Illuminate\Contracts\Routing\ResponseFactory;
+use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Foundation\Routing\PrecognitiveCallableDispatcher;
 use Illuminate\Foundation\Routing\PrecognitiveControllerDispatcher;
 use Illuminate\Http\Response;
@@ -62,11 +63,19 @@ class Precognition
      */
     protected function prepareForPrecognition($request)
     {
+        // TODO: if we create an inherited skeleton version of this middleware
+        // the method should be defined, call the parent version, and have this
+        // as a serving suggestion, maybe. Otherwise a good snippet for the docs.
+        //
+        // if ($request->is('admin/*')) {
+        //     $request->withPrecognitiveClientRuleFiltering();
+        // }
+
         $request->attributes->set('precognitive', true);
 
         $this->container->singleton(
             'precognitive.ruleResolver',
-            fn () => fn ($rules, $r = null) => $this->resolveValidationRules($r ?? $request, $rules)
+            fn () => fn ($rules, $r = null) => $this->filterValidationRules($r ?? $request, $rules)
         );
 
         $this->container->singleton(
@@ -98,9 +107,9 @@ class Precognition
      * @param  array  $rules
      * @return array
      */
-    protected function resolveValidationRules($request, $rules)
+    protected function filterValidationRules($request, $rules)
     {
-        if (! $request->headers->has('Precognition-Validate-Only')) {
+        if (! $request->precognitiveClientRuleFiltering() || ! $request->headers->has('Precognition-Validate-Only')) {
             return $rules;
         }
 
