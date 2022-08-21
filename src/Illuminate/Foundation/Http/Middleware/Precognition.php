@@ -2,7 +2,6 @@
 
 namespace Illuminate\Foundation\Http\Middleware;
 
-use Closure;
 use Illuminate\Container\Container;
 use Illuminate\Contracts\Routing\ResponseFactory;
 use Illuminate\Foundation\Routing\PrecognitiveCallableDispatcher;
@@ -33,7 +32,7 @@ class Precognition
      * @param  \Closure  $next
      * @return mixed
      */
-    public function handle($request, Closure $next)
+    public function handle($request, $next)
     {
         if (! $this->isAttemptingPrecognition($request)) {
             return $this->appendVaryHeader($request, $next($request));
