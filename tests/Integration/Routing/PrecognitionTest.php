@@ -2,6 +2,7 @@
 
 namespace Illuminate\Tests\Integration\Routing;
 
+use Exception;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Foundation\Http\Middleware\Precognition;
@@ -13,13 +14,16 @@ use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Route;
 use Orchestra\Testbench\TestCase;
 
+function fail() {
+    throw new Exception('The controller for this request was executed when it should not have been.');
+}
+
 class PrecognitionTest extends TestCase
 {
-    public function testItProvidesSensibleEmptyResponseViaClosureRoutes()
+    public function testItReturnsEmptyResponseViaClosureRoutes()
     {
-        Route::get('test-route', function () {
-            throw new \Exception('xxxx');
-        })->middleware(Precognition::class);
+        Route::get('test-route', fn () => fail())
+            ->middleware(Precognition::class);
 
         $response = $this->get('test-route', ['Precognition' => 'true']);
 
@@ -28,7 +32,7 @@ class PrecognitionTest extends TestCase
         $response->assertHeader('Vary', 'Precognition');
     }
 
-    public function testItProvidesSensibleEmptyResponseViaControllerRoutes()
+    public function testItReturnsEmptyResponseViaControllerRoutes()
     {
         Route::get('test-route', [PrecognitionTestController::class, 'methodWithNoPrediction'])
             ->middleware(Precognition::class);
@@ -37,140 +41,121 @@ class PrecognitionTest extends TestCase
 
         $response->assertNoContent();
         $response->assertHeader('Precognition', 'true');
+        $response->assertHeader('Vary', 'Precognition');
     }
 
-    public function testItCanImplementMagicMethodOnControllerToProvideResponse()
+    public function testItCanReturnResponseFromPrediction()
     {
-        Route::get('test-route', [PrecognitionTestController::class, 'update'])
+        Route::get('test-route', [PrecognitionTestController::class, 'methodWithPredictionReturningConflictResponse'])
             ->middleware(Precognition::class);
 
         $response = $this->get('test-route', ['Precognition' => 'true']);
 
         $response->assertStatus(409);
-        $this->assertSame('Conflict', $response->content());
         $response->assertHeader('Precognition', 'true');
     }
 
-    public function testItBindsPrecognitiveStateToRequestAttribute()
+    public function testItExposesPrecognitiveMethodOnRequest()
     {
-        Route::get('test-route', function () {
-            throw new \Exception('xxxx');
-        })->middleware(Precognition::class);
+        Route::get('test-route', fn () => fail())
+            ->middleware(Precognition::class);
 
         $this->get('test-route');
-
         $this->assertNull(request()->attributes->get('precognitive'));
         $this->assertFalse(request()->precognitive());
 
         $this->get('test-route', ['Precognition' => 'true']);
-
         $this->assertTrue(request()->attributes->get('precognitive'));
         $this->assertTrue(request()->precognitive());
     }
 
-    public function testItBindsRequestMacro()
-    {
-        Route::get('test-route', [PrecognitionTestController::class, 'checkPrecogMacro'])
-            ->middleware(Precognition::class);
-
-        $responses = [];
-        $responses[] = $this->get('test-route')->content();
-        $responses[] = $this->get('test-route', ['Precognition' => 'true'])->content();
-
-        $this->assertSame(['no', 'yes'], $responses);
-    }
-
     public function testItProvidesControllerMethodArgumentsToPredictionMethod()
     {
-        Route::get('test-route/{user}', [PrecognitionTestController::class, 'checkArguments'])
+        Route::get('test-route/{user}', [PrecognitionTestController::class, 'methodWithPredictionReturningArguments'])
             ->middleware(Precognition::class);
 
-        $response = $this->get('test-route/456', ['Precognition' => 'true']);
+        $response = $this->get('test-route/1234567890', ['Precognition' => 'true']);
 
-        $response->assertExactJson([
-            'request' => 'Illuminate\\Http\\Request',
-            'user' => '456',
-            'count' => 2,
-        ]);
+        $response->assertOk();
+        $response->assertExactJson(['Illuminate\\Http\\Request', '1234567890']);
     }
 
-    public function testItCanSpecifyRulesThatShouldNotBeRunWhenPrecognitive()
+    public function testItCanExcludeValidationRulesWhenPrecognitive()
     {
-        Route::post('test-route', function (PrecognitionTestRequest $request) {
-            //
-        })->middleware([Precognition::class]);
+        Route::post('test-route', fn (PrecognitionTestRequest $request) => fail())
+            ->middleware(Precognition::class);
 
         $response = $this->postJson('test-route', [
-            'always' => 'foo',
-            'whenNotPrecognitive' => 'foo',
-        ], ['Precognition' => 'true']);
-
-        $response->assertJsonPath('errors', [
-            'always' => [
-                'The always must be an integer.'
-            ]
-        ]);
-    }
-
-    public function testItCanExcludedRulesRunAsExpectedWithoutPrecognition()
-    {
-        Route::post('test-route', function (PrecognitionTestRequest $request) {
-            //
-        })->middleware([Precognition::class]);
-
-        $response = $this->postJson('test-route', [
-            'always' => 'foo',
-            'whenNotPrecognitive' => 'foo',
-        ]);
-
-        $response->assertJsonPath('errors', [
-            'always' => [
-                'The always must be an integer.'
-            ],
-            'whenNotPrecognitive' => [
-                'The when not precognitive must be an integer.'
-            ]
-        ]);
-    }
-
-    public function testClientCanSpecifyInputsToValidate()
-    {
-        Route::post('test-route', function (PrecognitionTestRequest $request) {
-            //
-        })->middleware([Precognition::class]);
-
-        $response = $this->postJson('test-route', [
-            'always' => 'foo',
-            'sometimes_1' => 'foo',
-            'sometimes_2' => 'foo',
-            'whenNotPrecognitive' => 'foo',
+            'required_integer' => 'foo',
+            'required_integer_when_not_precognitive' => 'foo',
         ], [
             'Precognition' => 'true',
-            'Precognition-Validate-Only' => 'sometimes_1,sometimes_2',
         ]);
 
-
+        $response->assertStatus(422);
         $response->assertJsonPath('errors', [
-            'sometimes_1' => [
-                'The sometimes 1 must be an integer.'
+            'required_integer' => [
+                'The required integer must be an integer.',
             ],
-            'sometimes_2' => [
-                'The sometimes 2 must be an integer.'
-            ]
         ]);
     }
 
-    public function testItCanSpecifyNoRulesToValidate()
+    public function testItRunsExcludedRulesWhenNotPrecognitive()
     {
-        Route::post('test-route', function (PrecognitionTestRequest $request) {
-            //
-        })->middleware([Precognition::class]);
+        Route::post('test-route', fn (PrecognitionTestRequest $request) => fail())
+            ->middleware(Precognition::class);
 
         $response = $this->postJson('test-route', [
-            'always' => 'foo',
-            'sometimes_1' => 'foo',
-            'sometimes_2' => 'foo',
-            'whenNotPrecognitive' => 'foo',
+            'required_integer' => 'foo',
+            'required_integer_when_not_precognitive' => 'foo',
+        ]);
+
+        $response->assertStatus(422);
+        $response->assertJsonPath('errors', [
+            'required_integer' => [
+                'The required integer must be an integer.',
+            ],
+            'required_integer_when_not_precognitive' => [
+                'The required integer when not precognitive must be an integer.',
+            ],
+        ]);
+    }
+
+    public function testClientCanSpecifyInputToValidate()
+    {
+        Route::post('test-route', fn (PrecognitionTestRequest $request) => fail())
+            ->middleware(Precognition::class);
+
+        $response = $this->postJson('test-route', [
+            // 'required_integer' => 'foo',
+            'optional_integer_1' => 'foo',
+            'optional_integer_2' => 'foo',
+        ], [
+            'Precognition' => 'true',
+            'Precognition-Validate-Only' => 'optional_integer_1,optional_integer_2',
+        ]);
+
+        $response->assertStatus(422);
+        $response->assertJsonPath('errors', [
+            'optional_integer_1' => [
+                'The optional integer 1 must be an integer.',
+            ],
+            'optional_integer_2' => [
+                'The optional integer 2 must be an integer.',
+            ],
+        ]);
+    }
+
+    public function testClientCanSpecifyNoInputsToValidate()
+    {
+        Route::post('test-route', fn (PrecognitionTestRequest $request) => fail())
+            ->middleware(Precognition::class);
+
+        $response = $this->postJson('test-route', [
+            // 'required_integer' => 'foo',
+            'required_integer_when_not_precognitive' => 'foo',
+            'optional_integer_1' => 'foo',
+            'optional_integer_2' => 'foo',
         ], [
             'Precognition' => 'true',
             'Precognition-Validate-Only' => '',
@@ -179,259 +164,215 @@ class PrecognitionTest extends TestCase
         $response->assertNoContent();
     }
 
-    public function testResponsesGeneratedViaExceptionBasedFlowControlHavePreparedHeaders()
+    public function testItAppliesHeadersWhenExceptionThrownInPrediction()
     {
-        Route::get('test-route', [PrecognitionTestController::class, 'throwNotFound'])
-            ->middleware([Precognition::class]);
+        Route::get('test-route', [PrecognitionTestController::class, 'methodWherePredictionThrowsModelNotFoundException'])
+            ->middleware(Precognition::class);
 
         $response = $this->get('test-route', ['Precognition' => 'true']);
 
         $response->assertNotFound();
         $response->assertHeader('Precognition', 'true');
-
-        // Authorize first...
-        Gate::define('alwaysDeny', fn () => false);
-        Route::get('test-route', function () {
-            throw new Exception('xxxx');
-        })->middleware([
-            'can:alwaysDeny',
-            Precognition::class,
-        ]);
-
-        $response = $this->get('test-route', ['Precognition' => 'true']);
-
-        $response->assertForbidden();
-        $response->assertHeader('Precognition', 'true');
-
-        // Authorize last...
-        Gate::define('alwaysDeny', fn () => false);
-        Route::get('test-route', function () {
-            throw new Exception('xxxx');
-        })->middleware([
-            Precognition::class,
-            'can:alwaysDeny',
-        ]);
-
-        $response = $this->get('test-route', ['Precognition' => 'true']);
-
-        $response->assertForbidden();
-        $response->assertHeader('Precognition', 'true');
+        $response->assertHeader('Vary', 'Precognition');
     }
 
-    public function testPredictionMethodCanPassValuesToMainControllerMethod()
+    public function testItAppliesHeadersWhenFlowControlExceptionIsThrown()
     {
-        Route::get('test-route', [PrecognitionTestController::class, 'passValuesBetweenMethods'])
-            ->middleware([Precognition::class]);
+        // Check with Authorize middleware first...
+        Gate::define('alwaysDeny', fn () => false);
+        Route::get('test-route-before', fn () => fail())
+            ->middleware(['can:alwaysDeny', Precognition::class]);
+
+        $response = $this->get('test-route-before', ['Precognition' => 'true']);
+
+        $response->assertForbidden();
+        $response->assertHeader('Precognition', 'true');
+        $response->assertHeader('Vary', 'Precognition');
+
+        // Check with Authorize middleware last...
+        Route::get('test-route-after', fn () => fail())
+            ->middleware([Precognition::class, 'can:alwaysDeny']);
+
+        $response = $this->get('test-route-after', ['Precognition' => 'true']);
+
+        $response->assertForbidden();
+        $response->assertHeader('Precognition', 'true');
+        $response->assertHeader('Vary', 'Precognition');
+    }
+
+    public function testContollerCanResolvePredictionAndReceivePayload()
+    {
+        Route::get('test-route', [PrecognitionTestController::class, 'methodWherePredictionPassesValuesToOutcome'])
+            ->middleware(Precognition::class);
 
         $response = $this->get('test-route');
 
         $response->assertOk();
         $response->assertExactJson([
-            'Laravel' => 'PHP',
-            'Vue' => 'JavaScript',
+            'first' => 'expected',
+            'second' => 'values',
+            'third' => 'passed',
         ]);
-    }
-
-    public function testPredictionMethodReceivesArgumentsWhenResolvingPrediction()
-    {
-        Route::get('test-route', [PrecognitionTestController::class, 'passValuesBetweenMethodsWithArguments'])
-            ->middleware([Precognition::class]);
-
-        $response = $this->get('test-route?q=41');
-
-        $response->assertOk();
-        $this->assertSame('41', $response->content());
-    }
-
-    public function testItCanReturnPassedOnValuesFromPrediction()
-    {
-        Route::get('test-route', [PrecognitionTestController::class, 'returnPassOn'])
-            ->middleware([Precognition::class]);
-
-        $response = $this->get('test-route', ['Precognition' => 'true']);
-
-        $response->assertNoContent();
-    }
-
-    public function testPrecognitionHeaderCanBeTrueOrOne()
-    {
-        Route::get('test-route', function () {
-            throw new Exception('xxxx');
-        })->middleware([Precognition::class]);
-
-        $response = $this->get('test-route', ['Precognition' => '1']);
-        $response->assertNoContent();
-        $response->assertHeader('Precognition', 'true');
-
-        $response = $this->get('test-route', ['Precognition' => 'true']);
-        $response->assertNoContent();
-        $response->assertHeader('Precognition', 'true');
-    }
-
-    public function testItCanCallPassToControllerMethodMultilpleTimesInPrediction()
-    {
-        Route::get('test-route', [PrecognitionTestController::class, 'testCanPassToOutcomeMultilpleTimes'])
-            ->middleware([Precognition::class]);
-
-        $response = $this->get('test-route');
-
-        $response->assertJson(['a', 'b', 'c']);
-        $response->assertHeaderMissing('Precognition');
     }
 
     public function testWhenResponseIsReturnedFromPredictionDuringResolveItReturnsThatResponseToTheClient()
     {
-        Route::get('test-route', [PrecognitionTestController::class, 'testResponseFromPredictionIsReturned'])
-            ->middleware([Precognition::class]);
+        Route::get('test-route', [PrecognitionTestController::class, 'methodWherePredictionReturnsResponseAndOutcomeResolvesPrediction'])
+            ->middleware(Precognition::class);
 
         $response = $this->get('test-route');
 
-        $this->assertSame('expected-response', $response->content());
+        $response->assertOk();
+        $this->assertSame('prediction-response', $response->content());
         $response->assertHeaderMissing('Precognition');
     }
 
-    public function testPredictionResponseIsParsedToSymfonyResponse()
+    public function testArbitraryPredictionResponseIsParsedResponse()
     {
-        Route::get('test-route', [PrecognitionTestController::class, 'testResponseFromPredictionIsParsedToSymfonyResponse'])
-            ->middleware([Precognition::class]);
+        Route::get('test-route', [PrecognitionTestController::class, 'methodWherePredictionReturnsArrayAndOutcomeResolvesPrediction'])
+            ->middleware(Precognition::class);
 
         $response = $this->get('test-route');
-
-        $response->assertJson(['expected' => 'response']);
+        $response->assertJson(['prediction' => 'response']);
         $response->assertHeaderMissing('Precognition');
+
+        $response = $this->get('test-route', ['Precognition' => 'true']);
+        $response->assertJson(['prediction' => 'response']);
+        $response->assertHeader('Precognition', 'true');
+        $response->assertHeader('Vary', 'Precognition');
     }
 
     public function testClientCanSpecifyInputsToValidateWhenUsingControllerValidate()
     {
-        Route::post('test-route', [PrecognitionTestController::class, 'testControllerValidateFiltering'])
-            ->middleware([Precognition::class]);
+        Route::post('test-route', [PrecognitionTestController::class, 'methodWherePredicitionValidatesViaControllerValidate'])
+            ->middleware(Precognition::class);
 
         $response = $this->postJson('test-route', [
-            'always' => 'foo',
-            'sometimes_1' => 'foo',
-            'sometimes_2' => 'foo',
-            'whenNotPrecognitive' => 'foo',
+            // 'required_integer' => 'foo',
+            'required_integer_when_not_precognitive' => 'foo',
+            'optional_integer_1' => 'integer',
+            'optional_integer_2' => 'integer',
         ], [
             'Precognition' => 'true',
-            'Precognition-Validate-Only' => 'sometimes_1,sometimes_2',
+            'Precognition-Validate-Only' => 'optional_integer_1,optional_integer_2',
         ]);
 
         $response->assertStatus(422);
         $response->assertJsonPath('errors', [
-            'sometimes_1' => [
-                'The sometimes 1 must be an integer.'
+            'optional_integer_1' => [
+                'The optional integer 1 must be an integer.',
             ],
-            'sometimes_2' => [
-                'The sometimes 2 must be an integer.'
-            ]
+            'optional_integer_2' => [
+                'The optional integer 2 must be an integer.',
+            ],
         ]);
     }
 
     public function testClientCanSpecifyInputsToValidateWhenUsingControllerValidateWithBag()
     {
-        Route::post('test-route', [PrecognitionTestController::class, 'testControllerValidateWithBagFiltering'])
-            ->middleware([Precognition::class]);
+        Route::post('test-route', [PrecognitionTestController::class, 'methodWherePredicitionValidatesViaControllerValidateWithBag'])
+            ->middleware(Precognition::class);
 
         $response = $this->postJson('test-route', [
-            'always' => 'foo',
-            'sometimes_1' => 'foo',
-            'sometimes_2' => 'foo',
-            'whenNotPrecognitive' => 'foo',
+            // 'required_integer' => 'foo',
+            'required_integer_when_not_precognitive' => 'foo',
+            'optional_integer_1' => 'integer',
+            'optional_integer_2' => 'integer',
         ], [
             'Precognition' => 'true',
-            'Precognition-Validate-Only' => 'sometimes_1,sometimes_2',
+            'Precognition-Validate-Only' => 'optional_integer_1,optional_integer_2',
         ]);
 
         $response->assertStatus(422);
         $response->assertJsonPath('errors', [
-            'sometimes_1' => [
-                'The sometimes 1 must be an integer.'
+            'optional_integer_1' => [
+                'The optional integer 1 must be an integer.',
             ],
-            'sometimes_2' => [
-                'The sometimes 2 must be an integer.'
-            ]
+            'optional_integer_2' => [
+                'The optional integer 2 must be an integer.',
+            ],
         ]);
     }
 
     public function testClientCanSpecifyInputsToValidateWhenUsingRequestValidate()
     {
-        Route::post('test-route', [PrecognitionTestController::class, 'testRequestValidateFiltering'])
-            ->middleware([Precognition::class]);
+        Route::post('test-route', [PrecognitionTestController::class, 'methodWherePredicitionValidatesViaRequestValidate'])
+            ->middleware(Precognition::class);
 
         $response = $this->postJson('test-route', [
-            'always' => 'foo',
-            'sometimes_1' => 'foo',
-            'sometimes_2' => 'foo',
-            'whenNotPrecognitive' => 'foo',
+            // 'required_integer' => 'foo',
+            'required_integer_when_not_precognitive' => 'foo',
+            'optional_integer_1' => 'integer',
+            'optional_integer_2' => 'integer',
         ], [
             'Precognition' => 'true',
-            'Precognition-Validate-Only' => 'sometimes_1,sometimes_2',
+            'Precognition-Validate-Only' => 'optional_integer_1,optional_integer_2',
         ]);
 
         $response->assertStatus(422);
         $response->assertJsonPath('errors', [
-            'sometimes_1' => [
-                'The sometimes 1 must be an integer.'
+            'optional_integer_1' => [
+                'The optional integer 1 must be an integer.',
             ],
-            'sometimes_2' => [
-                'The sometimes 2 must be an integer.'
-            ]
+            'optional_integer_2' => [
+                'The optional integer 2 must be an integer.',
+            ],
         ]);
     }
 
     public function testClientCanSpecifyInputsToValidateWhenUsingRequestValidateWithBag()
     {
-        Route::post('test-route', [PrecognitionTestController::class, 'testRequestValidateWithBagFiltering'])
-            ->middleware([Precognition::class]);
+        Route::post('test-route', [PrecognitionTestController::class, 'methodWherePredicitionValidatesViaRequestValidateWithBag'])
+            ->middleware(Precognition::class);
 
         $response = $this->postJson('test-route', [
-            'always' => 'foo',
-            'sometimes_1' => 'foo',
-            'sometimes_2' => 'foo',
-            'whenNotPrecognitive' => 'foo',
+            // 'required_integer' => 'foo',
+            'required_integer_when_not_precognitive' => 'foo',
+            'optional_integer_1' => 'integer',
+            'optional_integer_2' => 'integer',
         ], [
             'Precognition' => 'true',
-            'Precognition-Validate-Only' => 'sometimes_1,sometimes_2',
+            'Precognition-Validate-Only' => 'optional_integer_1,optional_integer_2',
         ]);
 
         $response->assertStatus(422);
         $response->assertJsonPath('errors', [
-            'sometimes_1' => [
-                'The sometimes 1 must be an integer.'
+            'optional_integer_1' => [
+                'The optional integer 1 must be an integer.',
             ],
-            'sometimes_2' => [
-                'The sometimes 2 must be an integer.'
-            ]
+            'optional_integer_2' => [
+                'The optional integer 2 must be an integer.',
+            ],
         ]);
     }
 
     public function testClientCanSpecifyInputsToValidateWhenUsingControllerValidateWithPassingArrayOfRules()
     {
-        Route::post('test-route', [PrecognitionTestController::class, 'testControllerValidateWithPassingArrayOfRulesFiltering'])
-            ->middleware([Precognition::class]);
+        Route::post('test-route', [PrecognitionTestController::class, 'methodWherePredicitionValidatesViaControllerValidateWith'])
+            ->middleware(Precognition::class);
 
         $response = $this->postJson('test-route', [
-            'always' => 'foo',
-            'sometimes_1' => 'foo',
-            'sometimes_2' => 'foo',
-            'whenNotPrecognitive' => 'foo',
+            // 'required_integer' => 'foo',
+            'required_integer_when_not_precognitive' => 'foo',
+            'optional_integer_1' => 'integer',
+            'optional_integer_2' => 'integer',
         ], [
             'Precognition' => 'true',
-            'Precognition-Validate-Only' => 'sometimes_1,sometimes_2',
+            'Precognition-Validate-Only' => 'optional_integer_1,optional_integer_2',
         ]);
 
         $response->assertStatus(422);
         $response->assertJsonPath('errors', [
-            'sometimes_1' => [
-                'The sometimes 1 must be an integer.'
+            'optional_integer_1' => [
+                'The optional integer 1 must be an integer.',
             ],
-            'sometimes_2' => [
-                'The sometimes 2 must be an integer.'
-            ]
+            'optional_integer_2' => [
+                'The optional integer 2 must be an integer.',
+            ],
         ]);
     }
 
-    public function testItAppendsAnAdditionalVaryHeaderInsteadOfReplacingAnyExistingHeaders()
+    public function testItAppendsAnAdditionalVaryHeaderInsteadOfReplacingAnyExistingVaryHeaders()
     {
         Route::get('test-route', [PrecognitionTestController::class, 'methodWherePredictionSetsVaryHeaderOnReturnedResponse'])
             ->middleware([Precognition::class]);
@@ -441,12 +382,12 @@ class PrecognitionTest extends TestCase
         $response->assertHeader('Vary', 'X-Inertia, Precognition');
     }
 
-    public function testPrecognitionForControllerMethodThatDoesntExist()
+    public function testItThrowsExceptionWhenControllerMethodDoesntExist()
     {
-        Route::post('test-route', [PrecognitionTestController::class, 'undefinedMethod'])
-            ->middleware([Precognition::class]);
+        Route::get('test-route', [PrecognitionTestController::class, 'undefinedMethod'])
+            ->middleware(Precognition::class);
 
-        $response = $this->postJson('test-route', [], [
+        $response = $this->get('test-route', [
             'Precognition' => 'true',
         ]);
 
@@ -459,24 +400,34 @@ class PrecognitionTestController
 {
     use PredictsOutcomes, ValidatesRequests;
 
-    public function updatePrediction()
-    {
-        return response('Conflict', Response::HTTP_CONFLICT);
-    }
-
-    public function update()
-    {
-        throw new \Exception('xxxx');
-    }
-
     public function methodWithNoPrediction()
     {
-        throw new \Exception('xxxx');
+        fail();
+    }
+
+    public function methodWithPredictionReturningConflictResponsePrediction()
+    {
+        return response('', Response::HTTP_CONFLICT);
+    }
+
+    public function methodWithPredictionReturningConflictResponse()
+    {
+        fail();
+    }
+
+    public function methodWithPredictionReturningArgumentsPrediction($request, $user)
+    {
+        return response()->json([$request::class, $user]);
+    }
+
+    public function methodWithPredictionReturningArguments(Request $request, string $user)
+    {
+        fail();
     }
 
     public function methodWherePredictionSetsVaryHeaderOnReturnedResponse()
     {
-        throw new \Exception('xxxx');
+        fail();
     }
 
     public function methodWherePredictionSetsVaryHeaderOnReturnedResponsePrediction()
@@ -484,185 +435,131 @@ class PrecognitionTestController
         return response('expected')->header('Vary', 'X-Inertia');
     }
 
-    public function checkPrecogMacroPrediction()
-    {
-        return response(request()->precognitive() ? 'yes' : 'no');
-    }
 
-    public function checkPrecogMacro()
-    {
-        return request()->precognitive() ? 'yes' : 'no';
-    }
-
-    public function checkArguments(Request $request, string $user)
-    {
-        throw new \Exception('xxxx');
-    }
-
-    public function checkArgumentsPrediction($request, $user)
-    {
-        return response()->json([
-            'request' => $request::class,
-            'user' => $user,
-            'count' => count(func_get_args()),
-        ]);
-    }
-
-    public function throwNotFoundPrediction()
+    public function methodWherePredictionThrowsModelNotFoundExceptionPrediction()
     {
         throw new ModelNotFoundException();
     }
 
-    public function throwNotFound()
+    public function methodWherePredictionThrowsModelNotFoundException()
     {
-        throw new Exception('xxxx');
+        fail();
     }
 
-    public function passValuesBetweenMethodsPrediction()
+    public function methodWherePredictionPassesValuesToOutcomePrediction()
     {
-        $this->passToOutcome('PHP', 'JavaScript');
+        $this->passToOutcome('expected', 'values');
+        $this->passToOutcome('passed');
     }
 
-    public function passValuesBetweenMethods()
+    public function methodWherePredictionPassesValuesToOutcome()
     {
-        [$backend, $frontend] = $this->resolvePrediction();
+        [$first, $second, $third] = $this->resolvePrediction();
 
         return [
-            'Laravel' => $backend,
-            'Vue' => $frontend,
+            'first' => $first,
+            'second' => $second,
+            'third' => $third,
         ];
     }
 
-    public function passValuesBetweenMethodsWithArgumentsPrediction($request)
+    public function methodWherePredictionReturnsResponseAndOutcomeResolvesPredictionPrediction()
     {
-        $this->passToOutcome($request->input('q'));
+        return response('prediction-response');
     }
 
-    public function passValuesBetweenMethodsWithArguments(Request $request)
-    {
-        [$q] = $this->resolvePrediction();
-
-        return $q;
-    }
-
-    public function returnPassOnPrediction()
-    {
-        return $this->passToOutcome('foo');
-    }
-
-    public function returnPassOn()
-    {
-        throw new Exception('xxxx');
-    }
-
-    public function testResponseFromPredictionIsReturnedPrediction()
-    {
-        return response('expected-response');
-    }
-
-    public function testResponseFromPredictionIsReturned()
+    public function methodWherePredictionReturnsResponseAndOutcomeResolvesPrediction()
     {
         $this->resolvePrediction();
 
-        throw new Exception('xxxx');
+        fail();
     }
 
-    public function testResponseFromPredictionIsParsedToSymfonyResponsePrediction()
+    public function methodWherePredictionReturnsArrayAndOutcomeResolvesPredictionPrediction()
     {
-        return ['expected' => 'response'];
+        return ['prediction' => 'response'];
     }
 
-    public function testResponseFromPredictionIsParsedToSymfonyResponse()
+    public function methodWherePredictionReturnsArrayAndOutcomeResolvesPrediction()
     {
         $this->resolvePrediction();
 
-        throw new Exception('xxxx');
+        fail();
     }
 
-    public function testCanPassToOutcomeMultilpleTimesPrediction()
-    {
-        $this->passToOutcome('a');
-        $this->passToOutcome('b', 'c');
-    }
-
-    public function testCanPassToOutcomeMultilpleTimes()
-    {
-        return $this->resolvePrediction();
-    }
-
-    public function testControllerValidateFilteringPrediction($request)
+    public function methodWherePredicitionValidatesViaControllerValidatePrediction($request)
     {
         $this->validate($request, [
-            'always' => 'integer',
-            'whenNotPrecognitive' => $this->whenNotPrecognitive('integer'),
-            'sometimes_1' => 'integer',
-            'sometimes_2' => 'integer',
+            'required_integer' => 'required|integer',
+            'required_integer_when_not_precognitive' => $this->whenNotPrecognitive('required|integer'),
+            'optional_integer_1' => 'integer',
+            'optional_integer_2' => 'integer',
         ]);
     }
 
-    public function testControllerValidateFiltering(Request $request)
+    public function methodWherePredicitionValidatesViaControllerValidate(Request $request)
     {
-        throw new Exception('xxxx');
+        fail();
     }
 
-    public function testControllerValidateWithBagFilteringPrediction($request)
+    public function methodWherePredicitionValidatesViaControllerValidateWithBagPrediction($request)
     {
         $this->validateWithBag('custom-bag', $request, [
-            'always' => 'integer',
-            'whenNotPrecognitive' => $this->whenNotPrecognitive('integer'),
-            'sometimes_1' => 'integer',
-            'sometimes_2' => 'integer',
+            'required_integer' => 'required|integer',
+            'required_integer_when_not_precognitive' => $this->whenNotPrecognitive('required|integer'),
+            'optional_integer_1' => 'integer',
+            'optional_integer_2' => 'integer',
         ]);
     }
 
-    public function testControllerValidateWithBagFiltering(Request $request)
+    public function methodWherePredicitionValidatesViaControllerValidateWithBag(Request $request)
     {
-        throw new Exception('xxxx');
+        fail();
     }
 
-    public function testRequestValidateFilteringPrediction($request)
+    public function methodWherePredicitionValidatesViaRequestValidatePrediction($request)
     {
         $request->validate([
-            'always' => 'integer',
-            'whenNotPrecognitive' => $this->whenNotPrecognitive('integer'),
-            'sometimes_1' => 'integer',
-            'sometimes_2' => 'integer',
+            'required_integer' => 'required|integer',
+            'required_integer_when_not_precognitive' => $this->whenNotPrecognitive('required|integer'),
+            'optional_integer_1' => 'integer',
+            'optional_integer_2' => 'integer',
         ]);
     }
 
-    public function testRequestValidateFiltering(Request $request)
+    public function methodWherePredicitionValidatesViaRequestValidate(Request $request)
     {
-        throw new Exception('xxxx');
+        fail();
     }
 
-    public function testRequestValidateWithBagFilteringPrediction($request)
+    public function methodWherePredicitionValidatesViaRequestValidateWithBagPrediction($request)
     {
         $request->validateWithBag('custom-bag', [
-            'always' => 'integer',
-            'whenNotPrecognitive' => $this->whenNotPrecognitive('integer'),
-            'sometimes_1' => 'integer',
-            'sometimes_2' => 'integer',
+            'required_integer' => 'required|integer',
+            'required_integer_when_not_precognitive' => $this->whenNotPrecognitive('required|integer'),
+            'optional_integer_1' => 'integer',
+            'optional_integer_2' => 'integer',
         ]);
     }
 
-    public function testRequestValidateWithBagFiltering(Request $request)
+    public function methodWherePredicitionValidatesViaRequestValidateWithBag(Request $request)
     {
-        throw new Exception('xxxx');
+        fail();
     }
 
-    public function testControllerValidateWithPassingArrayOfRulesFilteringPrediction($request)
+    public function methodWherePredicitionValidatesViaControllerValidateWithPrediction($request)
     {
         $this->validateWith([
-            'always' => 'integer',
-            'whenNotPrecognitive' => $this->whenNotPrecognitive('integer'),
-            'sometimes_1' => 'integer',
-            'sometimes_2' => 'integer',
+            'required_integer' => 'required|integer',
+            'required_integer_when_not_precognitive' => $this->whenNotPrecognitive('required|integer'),
+            'optional_integer_1' => 'integer',
+            'optional_integer_2' => 'integer',
         ]);
     }
 
-    public function testControllerValidateWithPassingArrayOfRulesFiltering(Request $request)
+    public function methodWherePredicitionValidatesViaControllerValidateWith(Request $request)
     {
-        throw new Exception('xxxx');
+        fail();
     }
 }
 
@@ -671,10 +568,10 @@ class PrecognitionTestRequest extends FormRequest
     public function rules()
     {
         return [
-            'always' => 'integer',
-            'whenNotPrecognitive' => $this->whenNotPrecognitive('integer'),
-            'sometimes_1' => 'integer',
-            'sometimes_2' => 'integer',
+            'required_integer' => 'required|integer',
+            'required_integer_when_not_precognitive' => $this->whenNotPrecognitive('required|integer'),
+            'optional_integer_1' => 'integer',
+            'optional_integer_2' => 'integer',
         ];
     }
 }
