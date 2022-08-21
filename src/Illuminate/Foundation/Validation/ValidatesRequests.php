@@ -20,7 +20,8 @@ trait ValidatesRequests
     public function validateWith($validator, Request $request = null)
     {
         // TODO: should precognition do anything here when passing a validator
-        // instance? Kinda feels more explicit. Not sure on this one.
+        // instance? Kinda feels more explicit, but not doing it feels inconsistent.
+        // Not sure on this one.
 
         $request = $request ?: request();
 

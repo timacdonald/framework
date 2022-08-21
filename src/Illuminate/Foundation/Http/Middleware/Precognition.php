@@ -63,9 +63,9 @@ class Precognition
      */
     protected function prepareForPrecognition($request)
     {
-        // TODO: if we create an inherited skeleton version of this middleware
-        // the method should be defined, call the parent version, and have this
-        // as a serving suggestion, maybe. Otherwise a good snippet for the docs.
+        // if we create an inherited skeleton version of this middleware the
+        // method should be defined, call the parent version, and have this as
+        // a serving suggestion, maybe. Otherwise a good snippet for the docs.
         //
         // if ($request->is('admin/*')) {
         //     $request->withPrecognitiveClientRuleFiltering();
