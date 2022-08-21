@@ -394,6 +394,27 @@ class PrecognitionTest extends TestCase
         $response->assertStatus(500);
         $this->assertSame('Attempting to predict the outcome of the [Illuminate\\Tests\\Integration\\Routing\\PrecognitionTestController::undefinedMethod()] method but it is not defined.', $response->exception->getMessage());
     }
+
+    public function testSpacesAreImportantInValidationFilterLogicForJsonRequests()
+    {
+        Route::post('test-route', fn (PrecognitionTestRequest $request) => fail())
+            ->middleware(Precognition::class);
+
+        $response = $this->postJson('test-route', [
+            ' input with spaces ' => 'foo',
+        ], [
+            'Precognition' => 'true',
+            'Precognition-Validate-Only' => ' input with spaces ',
+        ]);
+
+        $response->assertStatus(422);
+        $response->assertJsonPath('errors', [
+            ' input with spaces ' => [
+                'The input with spaces must be an integer.',
+            ],
+        ]);
+
+    }
 }
 
 class PrecognitionTestController
@@ -572,6 +593,7 @@ class PrecognitionTestRequest extends FormRequest
             'required_integer_when_not_precognitive' => $this->whenNotPrecognitive('required|integer'),
             'optional_integer_1' => 'integer',
             'optional_integer_2' => 'integer',
+            ' input with spaces ' => 'integer',
         ];
     }
 }
