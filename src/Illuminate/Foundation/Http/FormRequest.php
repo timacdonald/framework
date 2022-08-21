@@ -243,12 +243,13 @@ class FormRequest extends Request implements ValidatesWhenResolved
     /**
      * Apply validation rules only when the request is not precognitive.
      *
-     * @param  mixed  $rule
+     * @param  array|string|\Closure  $rules
+     * @param  array|string|\Closure  $defaultRules
      * @return \Illuminate\Validation\ConditionalRules
      */
-    protected function whenNotPrecognitive($rule)
+    protected function whenNotPrecognitive($rules, $defaultRules = [])
     {
-        return Rule::when(! $this->precognitive(), $rule);
+        return Rule::when(! $this->precognitive(), $rules, $defaultRules);
     }
 
     /**

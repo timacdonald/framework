@@ -74,12 +74,13 @@ trait PredictsOutcomes
     /**
      * Apply validation rules only when the request is not precognitive.
      *
-     * @param  mixed  $rule
+     * @param  array|string|\Closure  $rules
+     * @param  array|string|\Closure  $defaultRules
      * @param null|\Illuminate\Http\Request  $request
      * @return \Illuminate\Validation\ConditionalRules
      */
-    protected function whenNotPrecognitive($rule, $request = null)
+    protected function whenNotPrecognitive($rules, $defaultRules = [], $request = null)
     {
-        return Rule::when(! ($request ?? request())->precognitive(), $rule);
+        return Rule::when(! ($request ?? request())->precognitive(), $rules, $defaultRules);
     }
 }
