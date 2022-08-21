@@ -76,7 +76,7 @@ trait PredictsOutcomes
      *
      * @param  array|string|\Closure  $rules
      * @param  array|string|\Closure  $defaultRules
-     * @param null|\Illuminate\Http\Request  $request
+     * @param  null|\Illuminate\Http\Request  $request
      * @return \Illuminate\Validation\ConditionalRules
      */
     protected function whenNotPrecognitive($rules, $defaultRules = [], $request = null)
