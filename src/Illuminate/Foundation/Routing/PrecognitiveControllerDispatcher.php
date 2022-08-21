@@ -2,11 +2,9 @@
 
 namespace Illuminate\Foundation\Routing;
 
-use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Response;
 use Illuminate\Routing\ControllerDispatcher;
 use Illuminate\Routing\Route;
-use Illuminate\Support\Str;
 use RuntimeException;
 
 class PrecognitiveControllerDispatcher extends ControllerDispatcher
@@ -71,7 +69,7 @@ class PrecognitiveControllerDispatcher extends ControllerDispatcher
                 $controller->clearOutcomePayload();
             }
         });
-   }
+    }
 
     /**
      * Ensure that the method exists on the controller.
