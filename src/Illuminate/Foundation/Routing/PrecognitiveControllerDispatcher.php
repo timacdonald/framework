@@ -44,7 +44,7 @@ class PrecognitiveControllerDispatcher extends ControllerDispatcher
         $arguments = $this->resolveArguments($route, $controller, $method);
 
         return $this->controllerPrediction($route, $controller, $method, $arguments)
-            ?? ($this->emptyResponseResolver)($route, $controller, $method, $arguments);
+            ?? ($this->emptyResponseResolver)();
     }
 
     /**
