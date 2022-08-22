@@ -497,6 +497,39 @@ class PrecognitionTest extends TestCase
         $this->assertFalse($request->precognitiveClientRuleFiltering());
         $this->assertNull($request->attributes->get('precognitive.clientRuleFiltering'));
     }
+
+    public function testItStopsExecutionAfterSuccessfulValidationWithValidationFilteringAndFormRequest()
+    {
+        Route::post('test-route', [PrecognitionTestController::class, 'methodWherePredictionThrowsExceptionAfterValidationWithFormRequest'])
+            ->middleware(PrecognitionAllowingClientValidationFilter::class);
+
+        $response = $this->post('test-route', [
+            'optional_integer_1' => 1,
+            'optional_integer_2' => 'foo',
+        ], [
+            'Precognition' => 'true',
+            'Precognition-Validate-Only' => 'optional_integer_1',
+        ]);
+
+        $response->assertNoContent();
+        $response->assertHeader('Precognition', 'true');
+    }
+
+    public function testItContinuesExecutionAfterSuccessfulValidationWithoutValidationFilteringAndFormRequest()
+    {
+        Route::post('test-route', [PrecognitionTestController::class, 'methodWherePredictionThrowsExceptionAfterValidationWithFormRequest'])
+            ->middleware(PrecognitionAllowingClientValidationFilter::class);
+
+        $response = $this->post('test-route', [
+            'required_integer' => 1,
+        ], [
+            'Precognition' => 'true',
+        ]);
+
+        $response->assertOk();
+        $this->assertSame('Prediction was executed.', $response->content());
+        $response->assertHeader('Precognition', 'true');
+    }
 }
 
 class PrecognitionTestController
@@ -661,6 +694,17 @@ class PrecognitionTestController
     }
 
     public function methodWherePredicitionValidatesViaControllerValidateWith(Request $request)
+    {
+        fail();
+    }
+
+    public function methodWherePredictionThrowsExceptionAfterValidationWithFormRequestPrediction($request)
+    {
+        return response('Prediction was executed.');
+    }
+
+    public function methodWherePredictionThrowsExceptionAfterValidationWithFormRequest(PrecognitionTestRequest $request)
+
     {
         fail();
     }

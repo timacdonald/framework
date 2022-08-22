@@ -2,6 +2,7 @@
 
 namespace Illuminate\Foundation\Routing;
 
+use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Http\Response;
 use Illuminate\Routing\ControllerDispatcher;
 use Illuminate\Routing\Route;
@@ -42,6 +43,16 @@ class PrecognitiveControllerDispatcher extends ControllerDispatcher
         $this->ensureMethodExists($controller, $method);
 
         $arguments = $this->resolveArguments($route, $controller, $method);
+
+        foreach ($arguments as $argument) {
+            if (
+                $argument instanceof FormRequest
+                && $argument->precognitiveClientRuleFiltering()
+                && $argument->headers->has('Precognition-Validate-Only')
+            ) {
+                return ($this->emptyResponseResolver)();
+            }
+        }
 
         return $this->controllerPrediction($route, $controller, $method, $arguments)
             ?? ($this->emptyResponseResolver)();
