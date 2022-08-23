@@ -8,26 +8,6 @@ use Illuminate\Routing\Route;
 class PrecognitiveCallableDispatcher extends CallableDispatcher
 {
     /**
-     * The empty response resolver.
-     *
-     * @var callable
-     */
-    protected $emptyResponseResolver;
-
-    /**
-     * Create a new precognitive controller dispatcher instance.
-     *
-     * @param  \Illuminate\Container\Container  $container
-     * @param  callable  $emptyResponseResolver
-     */
-    public function __construct($container, $emptyResponseResolver)
-    {
-        parent::__construct($container);
-
-        $this->emptyResponseResolver = $emptyResponseResolver;
-    }
-
-    /**
      * Dispatch a request to a given callable.
      *
      * @param  \Illuminate\Routing\Route  $route
@@ -38,6 +18,6 @@ class PrecognitiveCallableDispatcher extends CallableDispatcher
     {
         $this->resolveArguments($route, $callable);
 
-        return ($this->emptyResponseResolver)();
+        return $this->container['precognitive.emptyResponse'];
     }
 }

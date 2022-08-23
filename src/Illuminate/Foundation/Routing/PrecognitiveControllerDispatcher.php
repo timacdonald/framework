@@ -11,26 +11,6 @@ use RuntimeException;
 class PrecognitiveControllerDispatcher extends ControllerDispatcher
 {
     /**
-     * The empty response resolver.
-     *
-     * @var callable
-     */
-    protected $emptyResponseResolver;
-
-    /**
-     * Create a new precognitive controller dispatcher instance.
-     *
-     * @param  \Illuminate\Container\Container  $container
-     * @param  callable  $emptyResponseResolver
-     */
-    public function __construct($container, $emptyResponseResolver)
-    {
-        parent::__construct($container);
-
-        $this->emptyResponseResolver = $emptyResponseResolver;
-    }
-
-    /**
      * Dispatch a request to a given controller and method.
      *
      * @param  \Illuminate\Routing\Route  $route
@@ -50,12 +30,12 @@ class PrecognitiveControllerDispatcher extends ControllerDispatcher
                 && $argument->precognitiveClientRuleFiltering()
                 && $argument->headers->has('Precognition-Validate-Only')
             ) {
-                return ($this->emptyResponseResolver)();
+                return $this->container['precognitive.emptyResponse'];
             }
         }
 
         return $this->controllerPrediction($route, $controller, $method, $arguments)
-            ?? ($this->emptyResponseResolver)();
+            ?? $this->container['precognitive.emptyResponse'];
     }
 
     /**

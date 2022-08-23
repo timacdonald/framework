@@ -73,20 +73,10 @@ class Precognition
 
         $request->attributes->set('precognitive', true);
 
-        $this->container->singleton(
-            'precognitive.ruleResolver',
-            fn () => fn ($rules, $r = null) => $this->filterValidationRules($r ?? $request, $rules)
-        );
-
-        $this->container->singleton(
-            CallableDispatcher::class,
-            fn ($app) => new PrecognitiveCallableDispatcher($app, fn () => $this->onEmptyResponse($request))
-        );
-
-        $this->container->singleton(
-            ControllerDispatcher::class,
-            fn ($app) => new PrecognitiveControllerDispatcher($app, fn () => $this->onEmptyResponse($request))
-        );
+        $this->container->bind('precognitive.ruleResolver', fn () => fn ($rules, $r = null) => $this->filterValidationRules($r ?? $request, $rules));
+        $this->container->bind('precognitive.emptyResponse', fn () => $this->onEmptyResponse($request));
+        $this->container->bind(CallableDispatcher::class, fn ($app) => new PrecognitiveCallableDispatcher($app));
+        $this->container->bind(ControllerDispatcher::class, fn ($app) => new PrecognitiveControllerDispatcher($app));
     }
 
     /**

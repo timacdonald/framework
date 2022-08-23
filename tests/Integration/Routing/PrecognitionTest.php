@@ -12,6 +12,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Validator;
 use Orchestra\Testbench\TestCase;
 
 function fail() {
@@ -500,7 +501,7 @@ class PrecognitionTest extends TestCase
 
     public function testItStopsExecutionAfterSuccessfulValidationWithValidationFilteringAndFormRequest()
     {
-        Route::post('test-route', [PrecognitionTestController::class, 'methodWherePredictionThrowsExceptionAfterValidationWithFormRequest'])
+        Route::post('test-route', [PrecognitionTestController::class, 'methodWherePredictionReturnsResponseWithFormRequest'])
             ->middleware(PrecognitionAllowingClientValidationFilter::class);
 
         $response = $this->post('test-route', [
@@ -517,7 +518,7 @@ class PrecognitionTest extends TestCase
 
     public function testItContinuesExecutionAfterSuccessfulValidationWithoutValidationFilteringAndFormRequest()
     {
-        Route::post('test-route', [PrecognitionTestController::class, 'methodWherePredictionThrowsExceptionAfterValidationWithFormRequest'])
+        Route::post('test-route', [PrecognitionTestController::class, 'methodWherePredictionReturnsResponseWithFormRequest'])
             ->middleware(PrecognitionAllowingClientValidationFilter::class);
 
         $response = $this->post('test-route', [
@@ -528,6 +529,138 @@ class PrecognitionTest extends TestCase
 
         $response->assertOk();
         $this->assertSame('Prediction was executed.', $response->content());
+        $response->assertHeader('Precognition', 'true');
+    }
+
+    public function testItStopsExecutionAfterSuccessfulValidationWithValidationFilteringAndControllerValidate()
+    {
+        Route::post('test-route', [PrecognitionTestController::class, 'methodWherePredictionReturnsResponseWithControllerValidate'])
+            ->middleware(PrecognitionAllowingClientValidationFilter::class);
+
+        $response = $this->post('test-route', [
+            'optional_integer_1' => 1,
+            'optional_integer_2' => 'foo',
+        ], [
+            'Precognition' => 'true',
+            'Precognition-Validate-Only' => 'optional_integer_1',
+        ]);
+
+        $response->assertNoContent();
+        $response->assertHeader('Precognition', 'true');
+    }
+
+    public function testItContinuesExecutionAfterSuccessfulValidationWithoutValidationFilteringAndControllerValidate()
+    {
+        Route::post('test-route', [PrecognitionTestController::class, 'methodWherePredictionReturnsResponseWithControllerValidate'])
+            ->middleware(PrecognitionAllowingClientValidationFilter::class);
+
+        $response = $this->post('test-route', [
+            'required_integer' => 1,
+        ], [
+            'Precognition' => 'true',
+        ]);
+
+        $response->assertOk();
+        $this->assertSame('Post-validation code was executed.', $response->content());
+        $response->assertHeader('Precognition', 'true');
+    }
+
+    public function testItStopsExecutionAfterSuccessfulValidationWithValidationFilteringAndControllerValidateWithBag()
+    {
+        Route::post('test-route', [PrecognitionTestController::class, 'methodWherePredictionReturnsResponseWithControllerValidateWithBag'])
+            ->middleware(PrecognitionAllowingClientValidationFilter::class);
+
+        $response = $this->post('test-route', [
+            'optional_integer_1' => 1,
+            'optional_integer_2' => 'foo',
+        ], [
+            'Precognition' => 'true',
+            'Precognition-Validate-Only' => 'optional_integer_1',
+        ]);
+
+        $response->assertNoContent();
+        $response->assertHeader('Precognition', 'true');
+    }
+
+    public function testItContinuesExecutionAfterSuccessfulValidationWithoutValidationFilteringAndControllerValidateWithBag()
+    {
+        Route::post('test-route', [PrecognitionTestController::class, 'methodWherePredictionReturnsResponseWithControllerValidateWithBag'])
+            ->middleware(PrecognitionAllowingClientValidationFilter::class);
+
+        $response = $this->post('test-route', [
+            'required_integer' => 1,
+        ], [
+            'Precognition' => 'true',
+        ]);
+
+        $response->assertOk();
+        $this->assertSame('Post-validation code was executed.', $response->content());
+        $response->assertHeader('Precognition', 'true');
+    }
+
+    public function testItStopsExecutionAfterSuccessfulValidationWithValidationFilteringAndControllerValidateWith()
+    {
+        Route::post('test-route', [PrecognitionTestController::class, 'methodWherePredictionReturnsResponseWithControllerValidateWith'])
+            ->middleware(PrecognitionAllowingClientValidationFilter::class);
+
+        $response = $this->post('test-route', [
+            'optional_integer_1' => 1,
+            'optional_integer_2' => 'foo',
+        ], [
+            'Precognition' => 'true',
+            'Precognition-Validate-Only' => 'optional_integer_1',
+        ]);
+
+        $response->assertNoContent();
+        $response->assertHeader('Precognition', 'true');
+    }
+
+    public function testItContinuesExecutionAfterSuccessfulValidationWithoutValidationFilteringAndControllerValidateWith()
+    {
+        Route::post('test-route', [PrecognitionTestController::class, 'methodWherePredictionReturnsResponseWithControllerValidateWith'])
+            ->middleware(PrecognitionAllowingClientValidationFilter::class);
+
+        $response = $this->post('test-route', [
+            'required_integer' => 1,
+        ], [
+            'Precognition' => 'true',
+        ]);
+
+        $response->assertOk();
+        $this->assertSame('Post-validation code was executed.', $response->content());
+        $response->assertHeader('Precognition', 'true');
+    }
+
+    public function testItStopsExecutionAfterSuccessfulValidationWithValidationFilteringAndControllerValidateWithPassingValidator()
+    {
+        Route::post('test-route', [PrecognitionTestController::class, 'methodWherePredictionReturnsResponseWithControllerValidateWithPassingValidator'])
+            ->middleware(PrecognitionAllowingClientValidationFilter::class);
+
+        $response = $this->post('test-route', [
+            'optional_integer_1' => 1,
+            'optional_integer_2' => 'foo',
+        ], [
+            'Precognition' => 'true',
+            'Precognition-Validate-Only' => 'optional_integer_1',
+        ]);
+
+        $response->assertNoContent();
+        $response->assertHeader('Precognition', 'true');
+    }
+
+    public function testItContinuesExecutionAfterSuccessfulValidationWithoutValidationFilteringAndControllerValidateWithPassingValidator()
+    {
+        Route::post('test-route', [PrecognitionTestController::class, 'methodWherePredictionReturnsResponseWithControllerValidateWithPassingValidator'])
+            ->middleware(PrecognitionAllowingClientValidationFilter::class);
+
+        $response = $this->post('test-route', [
+            'required_integer' => 1,
+        ], [
+            'Precognition' => 'true',
+        ]);
+
+        $response->assertOk();
+        $this->assertSame('Post-validation code was executed.', $response->content());
         $response->assertHeader('Precognition', 'true');
     }
 }
@@ -698,13 +831,78 @@ class PrecognitionTestController
         fail();
     }
 
-    public function methodWherePredictionThrowsExceptionAfterValidationWithFormRequestPrediction($request)
+    public function methodWherePredictionReturnsResponseWithFormRequestPrediction($request)
     {
         return response('Prediction was executed.');
     }
 
-    public function methodWherePredictionThrowsExceptionAfterValidationWithFormRequest(PrecognitionTestRequest $request)
+    public function methodWherePredictionReturnsResponseWithFormRequest(PrecognitionTestRequest $request)
 
+    {
+        fail();
+    }
+
+    public function methodWherePredictionReturnsResponseWithControllerValidatePrediction($request)
+    {
+        $this->validate($request, [
+            'required_integer' => 'required|integer',
+            'optional_integer_1' => 'integer',
+            'optional_integer_2' => 'integer',
+        ]);
+
+        return response('Post-validation code was executed.');
+    }
+
+    public function methodWherePredictionReturnsResponseWithControllerValidate(Request $request)
+
+    {
+        fail();
+    }
+
+    public function methodWherePredictionReturnsResponseWithControllerValidateWithBagPrediction($request)
+    {
+        $this->validateWithBag('custom-bag', $request, [
+            'required_integer' => 'required|integer',
+            'optional_integer_1' => 'integer',
+            'optional_integer_2' => 'integer',
+        ]);
+
+        return response('Post-validation code was executed.');
+    }
+
+    public function methodWherePredictionReturnsResponseWithControllerValidateWithBag(Request $request)
+    {
+        fail();
+    }
+
+    public function methodWherePredictionReturnsResponseWithControllerValidateWithPrediction($request)
+    {
+        $this->validateWith([
+            'required_integer' => 'required|integer',
+            'optional_integer_1' => 'integer',
+            'optional_integer_2' => 'integer',
+        ]);
+
+        return response('Post-validation code was executed.');
+    }
+
+    public function methodWherePredictionReturnsResponseWithControllerValidateWith(Request $request)
+    {
+        fail();
+    }
+
+    public function methodWherePredictionReturnsResponseWithControllerValidateWithPassingValidatorPrediction($request)
+    {
+        $this->validateWith(Validator::make($request->all(), [
+            'required_integer' => 'required|integer',
+            'optional_integer_1' => 'integer',
+            'optional_integer_2' => 'integer',
+        ]));
+
+        return response('Post-validation code was executed.');
+    }
+
+    public function methodWherePredictionReturnsResponseWithControllerValidateWithPassingValidator(Request $request)
     {
         fail();
     }

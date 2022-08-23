@@ -3,6 +3,7 @@
 namespace Illuminate\Foundation\Validation;
 
 use Illuminate\Contracts\Validation\Factory;
+use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 
@@ -26,14 +27,12 @@ trait ValidatesRequests
         $request = $request ?: request();
 
         if (is_array($validator)) {
-            $rules = $request->precognitive()
-                ? app('precognitive.ruleResolver')($validator, $request)
-                : $validator;
-
-            $validator = $this->getValidationFactory()->make($request->all(), $rules);
+            $validator = $this->getValidationFactory()->make($request->all(), $this->parseRules($validator, $request));
+        } else {
+            $validator = $validator->setRules($this->parseRules($validator->getRules(), $request));
         }
 
-        return $validator->validate();
+        return $validator->after($this->precognitionAfterHook($request))->validate();
     }
 
     /**
@@ -50,13 +49,10 @@ trait ValidatesRequests
     public function validate(Request $request, array $rules,
                              array $messages = [], array $customAttributes = [])
     {
-        $rules = $request->precognitive()
-            ? app('precognitive.ruleResolver')($rules, $request)
-            : $rules;
-
         return $this->getValidationFactory()->make(
-            $request->all(), $rules, $messages, $customAttributes
-        )->validate();
+            $request->all(), $this->parseRules($rules, $request),
+            $messages, $customAttributes
+        )->after($this->precognitionAfterHook($request))->validate();
     }
 
     /**
@@ -91,5 +87,39 @@ trait ValidatesRequests
     protected function getValidationFactory()
     {
         return app(Factory::class);
+    }
+
+    /**
+     * The after validation Precognition hook.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @return \Closure
+     */
+    protected function precognitionAfterHook($request)
+    {
+        return function ($validator) use ($request) {
+            if (
+                $validator->messages()->isEmpty()
+                && $request->precognitive()
+                && $request->precognitiveClientRuleFiltering()
+                && $request->headers->has('Precognition-Validate-Only')
+            ) {
+                throw new HttpResponseException(app('precognitive.emptyResponse'));
+            }
+        };
+    }
+
+    /**
+     * Parse the validation rules to run.
+     *
+     * @param  array  $rules
+     * @param  \Illuminate\Http\Request  $request
+     * @return array
+     */
+    protected function parseRules($rules, $request)
+    {
+        return $request->precognitive()
+            ? app('precognitive.ruleResolver')($rules, $request)
+            : $rules;
     }
 }
