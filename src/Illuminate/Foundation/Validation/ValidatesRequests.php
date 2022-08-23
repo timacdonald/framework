@@ -27,9 +27,9 @@ trait ValidatesRequests
         $request = $request ?: request();
 
         if (is_array($validator)) {
-            $validator = $this->getValidationFactory()->make($request->all(), $this->parseRules($validator, $request));
+            $validator = $this->getValidationFactory()->make($request->all(), $this->parseValidationRules($validator, $request));
         } else {
-            $validator = $validator->setRules($this->parseRules($validator->getRules(), $request));
+            $validator = $validator->setRules($this->parseValidationRules($validator->getRules(), $request));
         }
 
         return $validator->after($this->precognitionAfterHook($request))->validate();
@@ -50,7 +50,7 @@ trait ValidatesRequests
                              array $messages = [], array $customAttributes = [])
     {
         return $this->getValidationFactory()->make(
-            $request->all(), $this->parseRules($rules, $request),
+            $request->all(), $this->parseValidationRules($rules, $request),
             $messages, $customAttributes
         )->after($this->precognitionAfterHook($request))->validate();
     }
@@ -116,7 +116,7 @@ trait ValidatesRequests
      * @param  \Illuminate\Http\Request  $request
      * @return array
      */
-    protected function parseRules($rules, $request)
+    protected function parseValidationRules($rules, $request)
     {
         return $request->precognitive()
             ? app('precognitive.validationRuleFilter')($rules, $request)
