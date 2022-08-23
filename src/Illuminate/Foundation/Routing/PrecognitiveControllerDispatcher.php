@@ -27,7 +27,7 @@ class PrecognitiveControllerDispatcher extends ControllerDispatcher
         foreach ($arguments as $argument) {
             if (
                 $argument instanceof FormRequest
-                && $argument->precognitiveClientRuleFiltering()
+                && $argument->allowsPrecognitionValidationRuleFiltering()
                 && $argument->headers->has('Precognition-Validate-Only')
             ) {
                 return $this->container['precognitive.emptyResponse'];

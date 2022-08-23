@@ -101,7 +101,7 @@ trait ValidatesRequests
             if (
                 $validator->messages()->isEmpty()
                 && $request->precognitive()
-                && $request->precognitiveClientRuleFiltering()
+                && $request->allowsPrecognitionValidationRuleFiltering()
                 && $request->headers->has('Precognition-Validate-Only')
             ) {
                 throw new HttpResponseException(app('precognitive.emptyResponse'));

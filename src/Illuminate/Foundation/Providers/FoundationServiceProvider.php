@@ -85,7 +85,7 @@ class FoundationServiceProvider extends AggregateServiceProvider
                     if (
                         $validator->messages()->isEmpty()
                         && $this->precognitive()
-                        && $this->precognitiveClientRuleFiltering()
+                        && $this->allowsPrecognitionValidationRuleFiltering()
                         && $this->headers->has('Precognition-Validate-Only')
                     ) {
                         throw new HttpResponseException(app('precognitive.emptyResponse'));
@@ -172,31 +172,31 @@ class FoundationServiceProvider extends AggregateServiceProvider
     {
         Request::macro('precognitive', fn () => $this->attributes->get('precognitive', false));
 
-        Request::macro('withPrecognitiveClientRuleFiltering', function () {
-            if ($this instanceof FormRequest && property_exists($this, 'precognitiveClientRuleFiltering')) {
-                $this->precognitiveClientRuleFiltering = true;
+        Request::macro('withPrecognitionValidationRuleFiltering', function () {
+            if ($this instanceof FormRequest && property_exists($this, 'allowsPrecognitionValidationRuleFiltering')) {
+                $this->allowsPrecognitionValidationRuleFiltering = true;
             } else {
-                $this->attributes->set('precognitive.clientRuleFiltering', true);
+                $this->attributes->set('precognitive.validationRuleFiltering', true);
             }
 
              return $this;
         });
 
-        Request::macro('withoutPrecognitiveClientRuleFiltering', function () {
-            if ($this instanceof FormRequest && property_exists($this, 'precognitiveClientRuleFiltering')) {
-                $this->precognitiveClientRuleFiltering = false;
+        Request::macro('withoutPrecognitionValidationRuleFiltering', function () {
+            if ($this instanceof FormRequest && property_exists($this, 'allowsPrecognitionValidationRuleFiltering')) {
+                $this->allowsPrecognitionValidationRuleFiltering = false;
             } else {
-                $this->attributes->set('precognitive.clientRuleFiltering', false);
+                $this->attributes->set('precognitive.validationRuleFiltering', false);
             }
 
              return $this;
         });
 
-        Request::macro('precognitiveClientRuleFiltering', function () {
-            if ($this instanceof FormRequest && property_exists($this, 'precognitiveClientRuleFiltering')) {
-                return $this->precognitiveClientRuleFiltering;
+        Request::macro('allowsPrecognitionValidationRuleFiltering', function () {
+            if ($this instanceof FormRequest && property_exists($this, 'allowsPrecognitionValidationRuleFiltering')) {
+                return $this->allowsPrecognitionValidationRuleFiltering;
             } else {
-                return $this->attributes->get('precognitive.clientRuleFiltering', false);
+                return $this->attributes->get('precognitive.validationRuleFiltering', false);
             }
         });
     }

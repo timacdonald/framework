@@ -68,7 +68,7 @@ class Precognition
         // a serving suggestion, maybe. Otherwise a good snippet for the docs.
         //
         // if ($request->is('admin/*')) {
-        //     $request->withPrecognitiveClientRuleFiltering();
+        //     $request->withPrecognitionValidationRuleFiltering();
         // }
 
         $request->attributes->set('precognitive', true);
@@ -99,10 +99,11 @@ class Precognition
      */
     protected function filterValidationRules($request, $rules)
     {
-        if (! $request->precognitiveClientRuleFiltering() || ! $request->headers->has('Precognition-Validate-Only')) {
+        if (! $request->allowsPrecognitionValidationRuleFiltering() || ! $request->headers->has('Precognition-Validate-Only')) {
             return $rules;
         }
 
+        // TODO: how does this handle arrays of data?
         return Collection::make($rules)
             ->only(explode(',', $request->header('Precognition-Validate-Only')))
             ->all();
