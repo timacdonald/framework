@@ -3,9 +3,11 @@
 namespace Illuminate\Foundation\Routing;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\Response;
 use Illuminate\Routing\ControllerDispatcher;
 use Illuminate\Routing\Route;
+use ReflectionParameter;
 use RuntimeException;
 
 class PrecognitiveControllerDispatcher extends ControllerDispatcher
@@ -23,16 +25,6 @@ class PrecognitiveControllerDispatcher extends ControllerDispatcher
         $this->ensureMethodExists($controller, $method);
 
         $arguments = $this->resolveArguments($route, $controller, $method);
-
-        foreach ($arguments as $argument) {
-            if (
-                $argument instanceof FormRequest
-                && $argument->allowsPrecognitionValidationRuleFiltering()
-                && $argument->headers->has('Precognition-Validate-Only')
-            ) {
-                return $this->container['precognitive.emptyResponse'];
-            }
-        }
 
         return $this->controllerPrediction($route, $controller, $method, $arguments)
             ?? $this->container['precognitive.emptyResponse'];
@@ -78,5 +70,26 @@ class PrecognitiveControllerDispatcher extends ControllerDispatcher
         $class = $controller::class;
 
         throw new RuntimeException("Attempting to predict the outcome of the [{$class}::{$method}()] method but it is not defined.");
+    }
+
+    /**
+     * Attempt to transform the given parameter into a class instance.
+     *
+     * @param  \ReflectionParameter  $parameter
+     * @param  array  $parameters
+     * @param  object  $skippableValue
+     * @return mixed
+     */
+    protected function transformDependency(ReflectionParameter $parameter, $parameters, $skippableValue)
+    {
+        return tap(parent::transformDependency(...func_get_args()), function ($dependency) {
+            if (
+                $dependency instanceof FormRequest
+                && $dependency->allowsPrecognitionValidationRuleFiltering()
+                && $dependency->headers->has('Precognition-Validate-Only')
+            ) {
+                throw new HttpResponseException($this->container['precognitive.emptyResponse']);
+            }
+        });
     }
 }

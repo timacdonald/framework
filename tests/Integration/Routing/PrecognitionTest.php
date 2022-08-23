@@ -501,8 +501,9 @@ class PrecognitionTest extends TestCase
 
     public function testItStopsExecutionAfterSuccessfulValidationWithValidationFilteringAndFormRequest()
     {
-        Route::post('test-route', [PrecognitionTestController::class, 'methodWherePredictionReturnsResponseWithFormRequest'])
+        Route::post('test-route', [PrecognitionTestController::class, 'methodWhereSecondParameterBindResultToContainerWithFormRequest'])
             ->middleware(PrecognitionAllowingClientValidationFilter::class);
+        $this->app->instance('ClassWasInstantiated', false);
 
         $response = $this->post('test-route', [
             'optional_integer_1' => 1,
@@ -512,14 +513,16 @@ class PrecognitionTest extends TestCase
             'Precognition-Validate-Only' => 'optional_integer_1',
         ]);
 
+        $this->assertFalse($this->app['ClassWasInstantiated']);
         $response->assertNoContent();
         $response->assertHeader('Precognition', 'true');
     }
 
     public function testItContinuesExecutionAfterSuccessfulValidationWithoutValidationFilteringAndFormRequest()
     {
-        Route::post('test-route', [PrecognitionTestController::class, 'methodWherePredictionReturnsResponseWithFormRequest'])
+        Route::post('test-route', [PrecognitionTestController::class, 'methodWhereSecondParameterBindResultToContainerWithFormRequest'])
             ->middleware(PrecognitionAllowingClientValidationFilter::class);
+        $this->app->instance('ClassWasInstantiated', false);
 
         $response = $this->post('test-route', [
             'required_integer' => 1,
@@ -527,6 +530,7 @@ class PrecognitionTest extends TestCase
             'Precognition' => 'true',
         ]);
 
+        $this->assertTrue($this->app['ClassWasInstantiated']);
         $response->assertOk();
         $this->assertSame('Prediction was executed.', $response->content());
         $response->assertHeader('Precognition', 'true');
@@ -864,12 +868,12 @@ class PrecognitionTestController
         fail();
     }
 
-    public function methodWherePredictionReturnsResponseWithFormRequestPrediction($request)
+    public function methodWhereSecondParameterBindResultToContainerWithFormRequestPrediction($request, $foo)
     {
         return response('Prediction was executed.');
     }
 
-    public function methodWherePredictionReturnsResponseWithFormRequest(PrecognitionTestRequest $request)
+    public function methodWhereSecondParameterBindResultToContainerWithFormRequest(PrecognitionTestRequest $request, ClassThatBindsOnInstantiation $foo)
 
     {
         fail();
@@ -989,4 +993,12 @@ class PrecognitionTestRequestOptingIntoClientFiltering extends FormRequest
 class PrecognitionTestRequestOptingOutOfClientFiltering extends FormRequest
 {
     protected $allowsPrecognitionValidationRuleFiltering = false;
+}
+
+class ClassThatBindsOnInstantiation
+{
+    public function __construct()
+    {
+        app()->instance('ClassWasInstantiated', true);
+    }
 }
