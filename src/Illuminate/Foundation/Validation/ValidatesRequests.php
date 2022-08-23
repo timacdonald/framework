@@ -119,7 +119,7 @@ trait ValidatesRequests
     protected function parseRules($rules, $request)
     {
         return $request->precognitive()
-            ? app('precognitive.ruleResolver')($rules, $request)
+            ? app('precognitive.validationRuleFilter')($rules, $request)
             : $rules;
     }
 }
