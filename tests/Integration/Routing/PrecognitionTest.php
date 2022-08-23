@@ -663,6 +663,39 @@ class PrecognitionTest extends TestCase
         $this->assertSame('Post-validation code was executed.', $response->content());
         $response->assertHeader('Precognition', 'true');
     }
+
+    public function testItStopsExecutionAfterSuccessfulValidationWithValidationFilteringAndRequestValidate()
+    {
+        Route::post('test-route', [PrecognitionTestController::class, 'methodWherePredictionReturnsResponseWithRequestValidate'])
+            ->middleware(PrecognitionAllowingClientValidationFilter::class);
+
+        $response = $this->post('test-route', [
+            'optional_integer_1' => 1,
+            'optional_integer_2' => 'foo',
+        ], [
+            'Precognition' => 'true',
+            'Precognition-Validate-Only' => 'optional_integer_1',
+        ]);
+
+        $response->assertNoContent();
+        $response->assertHeader('Precognition', 'true');
+    }
+
+    public function testItContinuesExecutionAfterSuccessfulValidationWithoutValidationFilteringAndRequestValidate()
+    {
+        Route::post('test-route', [PrecognitionTestController::class, 'methodWherePredictionReturnsResponseWithRequestValidate'])
+            ->middleware(PrecognitionAllowingClientValidationFilter::class);
+
+        $response = $this->post('test-route', [
+            'required_integer' => 1,
+        ], [
+            'Precognition' => 'true',
+        ]);
+
+        $response->assertOk();
+        $this->assertSame('Post-validation code was executed.', $response->content());
+        $response->assertHeader('Precognition', 'true');
+    }
 }
 
 class PrecognitionTestController
@@ -903,6 +936,22 @@ class PrecognitionTestController
     }
 
     public function methodWherePredictionReturnsResponseWithControllerValidateWithPassingValidator(Request $request)
+    {
+        fail();
+    }
+
+    public function methodWherePredictionReturnsResponseWithRequestValidatePrediction($request)
+    {
+        $request->validate([
+            'required_integer' => 'required|integer',
+            'optional_integer_1' => 'integer',
+            'optional_integer_2' => 'integer',
+        ]);
+
+        return response('Post-validation code was executed.');
+    }
+
+    public function methodWherePredictionReturnsResponseWithRequestValidate(Request $request)
     {
         fail();
     }

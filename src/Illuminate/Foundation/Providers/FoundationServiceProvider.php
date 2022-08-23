@@ -6,6 +6,7 @@ use Illuminate\Contracts\Foundation\MaintenanceMode as MaintenanceModeContract;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Foundation\MaintenanceModeManager;
 use Illuminate\Foundation\Vite;
+use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\Request;
 use Illuminate\Log\Events\MessageLogged;
 use Illuminate\Support\AggregateServiceProvider;
@@ -79,7 +80,17 @@ class FoundationServiceProvider extends AggregateServiceProvider
                 ? app('precognitive.ruleResolver')($rules, $this)
                 : $rules;
 
-            return validator()->validate($this->all(), $rules, ...$params);
+            return validator($this->all(), $rules, ...$params)
+                ->after(function ($validator) {
+                    if (
+                        $validator->messages()->isEmpty()
+                        && $this->precognitive()
+                        && $this->precognitiveClientRuleFiltering()
+                        && $this->headers->has('Precognition-Validate-Only')
+                    ) {
+                        throw new HttpResponseException(app('precognitive.emptyResponse'));
+                    }
+                })->validate();
         });
 
         Request::macro('validateWithBag', function (string $errorBag, array $rules, ...$params) {
