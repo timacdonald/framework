@@ -419,8 +419,8 @@ class Handler implements ExceptionHandlerContract
     protected function prepareException(Throwable $e)
     {
         return match (true) {
-            $e instanceof BackedEnumCaseNotFoundException => new NotFoundHttpException($e->getMessage(), $e),
-            $e instanceof ModelNotFoundException => new NotFoundHttpException($e->getMessage(), $e),
+            $e instanceof BackedEnumCaseNotFoundException => new NotFoundHttpException(config('app.debug') ? $e->getMessage() : 'Not found.', $e),
+            $e instanceof ModelNotFoundException => new NotFoundHttpException(config('app.debug') ? $e->getMessage() : 'Not found.', $e),
             $e instanceof AuthorizationException && $e->hasStatus() => new HttpException(
                 $e->status(), $e->response()?->message() ?: (Response::$statusTexts[$e->status()] ?? 'Whoops, looks like something went wrong.'), $e
             ),

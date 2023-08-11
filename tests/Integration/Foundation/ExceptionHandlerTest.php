@@ -4,6 +4,11 @@ namespace Illuminate\Tests\Integration\Foundation;
 
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Auth\Access\Response;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
+use Illuminate\Database\MultipleRecordsFoundException;
+use Illuminate\Database\RecordsNotFoundException;
+use Illuminate\Routing\Exceptions\BackedEnumCaseNotFoundException;
+use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Route;
 use Orchestra\Testbench\TestCase;
 use Symfony\Component\Process\PhpProcess;
@@ -150,5 +155,79 @@ EOF, __DIR__.'/../../../', ['APP_RUNNING_IN_CONSOLE' => true]);
     {
         yield 'Throw exception' => [[Fixtures\Providers\ThrowUncaughtExceptionServiceProvider::class], false];
         yield 'Do not throw exception' => [[Fixtures\Providers\ThrowExceptionServiceProvider::class], true];
+    }
+
+    public function testItDoesExposesExceptionMessageInDebugMode()
+    {
+        Config::set('app.debug', true);
+
+        Route::get('model-not-found', fn () => throw (new ModelNotFoundException)->setModel('App\\Models\\User', 55));
+
+        $this->getJson('model-not-found')
+            ->assertStatus(404)
+            ->assertJson([
+                'message' => 'No query results for model [App\\Models\\User] 55',
+            ]);
+
+        Route::get('backed-enum-case-not-found', fn () => throw new BackedEnumCaseNotFoundException('App\\Enums\\UserType', 'superadmin'));
+
+        $this->getJson('backed-enum-case-not-found')
+            ->assertStatus(404)
+            ->assertJson([
+                'message' => 'Case [superadmin] not found on Backed Enum [App\\Enums\\UserType].',
+            ]);
+
+        Route::get('records-not-found', fn () => throw new RecordsNotFoundException('No database records were found'));
+
+        $this->getJson('records-not-found')
+            ->assertStatus(404)
+            ->assertJson([
+                'message' => 'Not found.',
+            ]);
+
+        Route::get('multiple-records-not-found', fn () => throw new MultipleRecordsFoundException(55));
+
+        $this->getJson('multiple-records-not-found')
+            ->assertStatus(500)
+            ->assertJson([
+                'message' => '55 records were found.',
+            ]);
+    }
+
+    public function testItDoesNotExposeModelInNonDebugMode()
+    {
+        Config::set('app.debug', false);
+
+        Route::get('model-not-found', fn () => throw (new ModelNotFoundException)->setModel('App\\Models\\User', 55));
+
+        $this->getJson('model-not-found')
+            ->assertStatus(404)
+            ->assertExactJson([
+                'message' => 'Not found.',
+            ]);
+
+        Route::get('backed-enum-case-not-found', fn () => throw new BackedEnumCaseNotFoundException('App\\Enums\\UserType', 'superadmin'));
+
+        $this->getJson('backed-enum-case-not-found')
+            ->assertStatus(404)
+            ->assertExactJson([
+                'message' => 'Not found.',
+            ]);
+
+        Route::get('records-not-found', fn () => throw new RecordsNotFoundException('No database records were found'));
+
+        $this->getJson('records-not-found')
+            ->assertStatus(404)
+            ->assertExactJson([
+                'message' => 'Not found.',
+            ]);
+
+        Route::get('multiple-records-not-found', fn () => throw new MultipleRecordsFoundException(55));
+
+        $this->getJson('multiple-records-not-found')
+            ->assertStatus(500)
+            ->assertExactJson([
+                'message' => 'Server Error',
+            ]);
     }
 }
