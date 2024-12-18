@@ -73,6 +73,21 @@ class CacheManager implements FactoryContract
     }
 
     /**
+     * Get a memoized cache driver instance.
+     *
+     * @param  string|null  $driver
+     * @return \Illuminate\Contracts\Cache\Repository
+     */
+    public function memo($driver = null)
+    {
+        $driver = $driver ?: $this->getDefaultDriver();
+
+        return $this->stores["__memoized:{$driver}"] ??= $this->repository(
+            new MemoizedStore($driver, $this->store($driver)), ['events' => false]
+        );
+    }
+
+    /**
      * Resolve the given store.
      *
      * @param  string  $name
