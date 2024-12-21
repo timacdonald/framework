@@ -426,6 +426,24 @@ class RedisStoreTest extends TestCase
         $this->assertSame('foo', Cache::memo('redis')->getPrefix());
     }
 
+    public function testMemoizedKeysArePrefixed()
+    {
+        $redis = Cache::store('redis');
+
+        $redis->setPrefix('aaaa');
+        $redis->put('name', 'Tim');
+        $redis->setPrefix('zzzz');
+        $redis->put('name', 'Taylor');
+
+        $redis->setPrefix('aaaa');
+        $value = Cache::memo('redis')->get('name');
+        $this->assertSame('Tim', $value);
+
+        $redis->setPrefix('zzzz');
+        $value = Cache::memo('redis')->get('name');
+        $this->assertSame('Taylor', $value);
+    }
+
     public function testItDoesNotDispatchEvents()
     {
         // TODO
