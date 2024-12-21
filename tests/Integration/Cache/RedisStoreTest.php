@@ -3,8 +3,17 @@
 namespace Illuminate\Tests\Integration\Cache;
 
 use DateTime;
+use Illuminate\Cache\Events\CacheEvent;
+use Illuminate\Cache\Events\CacheMissed;
+use Illuminate\Cache\Events\ForgettingKey;
+use Illuminate\Cache\Events\KeyForgotten;
+use Illuminate\Cache\Events\KeyWritten;
+use Illuminate\Cache\Events\RetrievingKey;
+use Illuminate\Cache\Events\RetrievingManyKeys;
+use Illuminate\Cache\Events\WritingKey;
 use Illuminate\Foundation\Testing\Concerns\InteractsWithRedis;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Redis;
 use Illuminate\Support\Sleep;
 use Orchestra\Testbench\TestCase;
@@ -444,8 +453,95 @@ class RedisStoreTest extends TestCase
         $this->assertSame('Taylor', $value);
     }
 
-    public function testItDoesNotDispatchEvents()
+    public function testItDispatchesDecoratedDriverEventsOnly()
     {
-        // TODO
+        $redis = Cache::driver('redis');
+        $events = [];
+        Event::listen('*', function ($type, $event) use (&$events) {
+            if ($event[0] instanceof CacheEvent) {
+                $events[] = $event[0];
+            }
+        });
+
+        Cache::memo('redis')->get('name');
+        $this->assertCount(2, $events);
+        $this->assertInstanceOf(RetrievingKey::class, $events[0]);
+        $this->assertSame('redis', $events[0]->storeName);
+        $this->assertSame('name', $events[0]->key);
+        $this->assertInstanceOf(CacheMissed::class, $events[1]);
+        $this->assertSame('redis', $events[1]->storeName);
+        $this->assertSame('name', $events[1]->key);
+        Cache::memo('redis')->get('name');
+        $this->assertCount(2, $events);
+
+        Cache::memo('redis')->many(['name']);
+        $this->assertCount(2, $events);
+
+
+        Cache::memo('redis')->many(['name.0', 'name.1']);
+        $this->assertCount(5, $events);
+        $this->assertInstanceOf(RetrievingManyKeys::class, $events[2]);
+        $this->assertSame('redis', $events[2]->storeName);
+        $this->assertSame(['name.0', 'name.1'], $events[2]->keys);
+        $this->assertInstanceOf(CacheMissed::class, $events[3]);
+        $this->assertSame('redis', $events[3]->storeName);
+        $this->assertSame('name.0', $events[3]->key);
+        $this->assertInstanceOf(CacheMissed::class, $events[4]);
+        $this->assertSame('redis', $events[4]->storeName);
+        $this->assertSame('name.1', $events[4]->key);
+
+        Cache::memo('redis')->many(['name.0', 'name.1']);
+        $this->assertCount(5, $events);
+
+        Cache::memo('redis')->put('name', 'Tim', 1);
+        $this->assertCount(7, $events);
+        $this->assertInstanceOf(WritingKey::class, $events[5]);
+        $this->assertSame('redis', $events[5]->storeName);
+        $this->assertSame('name', $events[5]->key);
+        $this->assertInstanceOf(KeyWritten::class, $events[6]);
+        $this->assertSame('redis', $events[6]->storeName);
+        $this->assertSame('name', $events[6]->key);
+
+        Cache::memo('redis')->putMany(['name.0' => 'Tim', 'name.1' => 'Taylor']);
+        $this->assertCount(11, $events);
+        $this->assertInstanceOf(WritingKey::class, $events[7]);
+        $this->assertSame('redis', $events[7]->storeName);
+        $this->assertSame('name.0', $events[7]->key);
+        $this->assertInstanceOf(KeyWritten::class, $events[8]);
+        $this->assertSame('redis', $events[8]->storeName);
+        $this->assertSame('name.0', $events[8]->key);
+        $this->assertInstanceOf(WritingKey::class, $events[9]);
+        $this->assertSame('redis', $events[9]->storeName);
+        $this->assertSame('name.1', $events[9]->key);
+        $this->assertInstanceOf(KeyWritten::class, $events[10]);
+        $this->assertSame('redis', $events[10]->storeName);
+        $this->assertSame('name.1', $events[10]->key);
+
+        Cache::memo('redis')->increment('count');
+        $this->assertCount(11, $events);
+
+        Cache::memo('redis')->decrement('count');
+        $this->assertCount(11, $events);
+
+        Cache::memo('redis')->forever('name', 'Taylor');
+        $this->assertCount(13, $events);
+        $this->assertInstanceOf(WritingKey::class, $events[11]);
+        $this->assertSame('redis', $events[11]->storeName);
+        $this->assertSame('name', $events[11]->key);
+        $this->assertInstanceOf(KeyWritten::class, $events[12]);
+        $this->assertSame('redis', $events[12]->storeName);
+        $this->assertSame('name', $events[12]->key);
+
+        Cache::memo('redis')->forget('name');
+        $this->assertCount(15, $events);
+        $this->assertInstanceOf(ForgettingKey::class, $events[13]);
+        $this->assertSame('redis', $events[13]->storeName);
+        $this->assertSame('name', $events[13]->key);
+        $this->assertInstanceOf(KeyForgotten::class, $events[14]);
+        $this->assertSame('redis', $events[14]->storeName);
+        $this->assertSame('name', $events[14]->key);
+
+        Cache::memo('redis')->flush();
+        $this->assertCount(15, $events);
     }
 }

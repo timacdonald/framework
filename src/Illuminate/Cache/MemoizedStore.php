@@ -34,7 +34,11 @@ class MemoizedStore implements Store
      */
     public function get($key)
     {
-        return $this->many([$key])[$key];
+        if (array_key_exists($this->prefix($key), $this->cache)) {
+            return $this->cache[$this->prefix($key)];
+        }
+
+        return $this->cache[$this->prefix($key)] = $this->repository->get($key);
     }
 
     /**
@@ -78,7 +82,11 @@ class MemoizedStore implements Store
      */
     public function put($key, $value, $seconds)
     {
-        return $this->putMany([$key => $value], $seconds);
+        return tap($this->repository->put($key, $value, $seconds), function ($result) use ($key, $value) {
+            if ($result) {
+                $this->memoize([$key => $value]);
+            }
+        });
     }
 
     /**
