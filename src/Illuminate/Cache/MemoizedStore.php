@@ -63,7 +63,14 @@ class MemoizedStore implements Store
         }
 
         if (count($missing) > 0) {
-            $retrieved = tap($this->repository->many($missing), $this->memoize(...));
+            $retrieved = tap($this->repository->many($missing), function ($values) {
+                $this->cache = [
+                    ...$this->cache,
+                    ...collect($values)->mapWithKeys(fn ($value, $key) => [
+                        $this->prefix($key) => $value,
+                    ]),
+                ];
+            });
         }
 
         return [
@@ -82,11 +89,9 @@ class MemoizedStore implements Store
      */
     public function put($key, $value, $seconds)
     {
-        return tap($this->repository->put($key, $value, $seconds), function ($result) use ($key, $value) {
-            if ($result) {
-                $this->memoize([$key => $value]);
-            }
-        });
+        unset($this->cache[$this->prefix($key)]);
+
+        return $this->repository->put($key, $value, $seconds);
     }
 
     /**
@@ -97,11 +102,11 @@ class MemoizedStore implements Store
      */
     public function putMany(array $values, $seconds)
     {
-        return tap($this->repository->putMany($values, $seconds), function ($result) use ($values) {
-            if ($result) {
-                $this->memoize($values);
-            }
-        });
+        foreach ($values as $key => $value) {
+            unset($this->cache[$this->prefix($key)]);
+        }
+
+        return $this->repository->putMany($values, $seconds);
     }
 
     /**
@@ -113,11 +118,9 @@ class MemoizedStore implements Store
      */
     public function increment($key, $value = 1)
     {
-        return tap($this->repository->increment($key, $value), function ($result) use ($key) {
-            if (is_int($result)) {
-                $this->memoize([$key => $result]);
-            }
-        });
+        unset($this->cache[$this->prefix($key)]);
+
+        return $this->repository->increment($key, $value);
     }
 
     /**
@@ -129,11 +132,9 @@ class MemoizedStore implements Store
      */
     public function decrement($key, $value = 1)
     {
-        return tap($this->repository->decrement($key, $value), function ($result) use ($key) {
-            if (is_int($result)) {
-                $this->memoize([$key => $result]);
-            }
-        });
+        unset($this->cache[$this->prefix($key)]);
+
+        return $this->repository->decrement($key, $value);
     }
 
     /**
@@ -145,11 +146,9 @@ class MemoizedStore implements Store
      */
     public function forever($key, $value)
     {
-        return tap($this->repository->forever($key, $value), function ($result) use ($key, $value) {
-            if ($result) {
-                $this->memoize([$key => $value]);
-            }
-        });
+        unset($this->cache[$this->prefix($key)]);
+
+        return $this->repository->forever($key, $value);
     }
 
     /**
@@ -160,11 +159,9 @@ class MemoizedStore implements Store
      */
     public function forget($key)
     {
-        return tap($this->repository->forget($key), function ($result) use ($key) {
-            if ($result) {
-                unset($this->cache[$this->prefix($key)]);
-            }
-        });
+        unset($this->cache[$this->prefix($key)]);
+
+        return $this->repository->forget($key);
     }
 
     /**
@@ -200,21 +197,5 @@ class MemoizedStore implements Store
     protected function prefix($key)
     {
         return $this->getPrefix().$key;
-    }
-
-    /**
-     * Memoize the given values.
-     *
-     * @param  array  $values
-     * @return void
-     */
-    protected function memoize($values)
-    {
-        $this->cache = [
-            ...$this->cache,
-            ...collect($values)->mapWithKeys(fn ($value, $key) => [
-                $this->prefix($key) => is_null($value) ? $value : (string) $value,
-            ]),
-        ];
     }
 }
