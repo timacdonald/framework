@@ -73,10 +73,12 @@ class MemoizedStore implements Store
             });
         }
 
-        return [
+        $result = [
             ...$memoized,
             ...$retrieved,
         ];
+
+        return array_replace(array_flip($keys), $result);
     }
 
     /**

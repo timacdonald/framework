@@ -41,14 +41,14 @@ class MemoizedStoreTest extends TestCase
 
     public function testItCanMemoizeWhenRetrievingSingleValue()
     {
-        Cache::put('name', 'Tim');
+        Cache::put('name', 'Tim', 60);
 
         $live = Cache::get('name');
         $memoized = Cache::memo()->get('name');
         $this->assertSame('Tim', $live);
         $this->assertSame('Tim', $memoized);
 
-        Cache::put('name', 'Taylor');
+        Cache::put('name', 'Taylor', 60);
 
         $live = Cache::get('name');
         $memoized = Cache::memo()->get('name');
@@ -63,7 +63,7 @@ class MemoizedStoreTest extends TestCase
         $this->assertNull($live);
         $this->assertNull($memoized);
 
-        Cache::put('name', 'Taylor');
+        Cache::put('name', 'Taylor', 60);
 
         $live = Cache::get('name');
         $memoized = Cache::memo()->get('name');
@@ -73,16 +73,16 @@ class MemoizedStoreTest extends TestCase
 
     public function testItCanMemoizeWhenRetrievingMulitpleValues()
     {
-        Cache::put('name.0', 'Tim');
-        Cache::put('name.1', 'Taylor');
+        Cache::put('name.0', 'Tim', 60);
+        Cache::put('name.1', 'Taylor', 60);
 
         $live = Cache::getMultiple(['name.0', 'name.1']);
         $memoized = Cache::memo()->getMultiple(['name.0', 'name.1']);
         $this->assertSame(['name.0' => 'Tim', 'name.1' => 'Taylor'], $live);
         $this->assertSame(['name.0' => 'Tim', 'name.1' => 'Taylor'], $memoized);
 
-        Cache::put('name.0', 'MacDonald');
-        Cache::put('name.1', 'Otwell');
+        Cache::put('name.0', 'MacDonald', 60);
+        Cache::put('name.1', 'Otwell', 60);
 
         $live = Cache::getMultiple(['name.0', 'name.1']);
         $memoized = Cache::memo()->getMultiple(['name.0', 'name.1']);
@@ -97,8 +97,8 @@ class MemoizedStoreTest extends TestCase
         $this->assertSame($live, ['name.0' => null, 'name.1' => null]);
         $this->assertSame($memoized, ['name.0' => null, 'name.1' => null]);
 
-        Cache::put('name.0', 'MacDonald');
-        Cache::put('name.1', 'Otwell');
+        Cache::put('name.0', 'MacDonald', 60);
+        Cache::put('name.1', 'Otwell', 60);
 
         $live = Cache::getMultiple(['name.0', 'name.1']);
         $memoized = Cache::memo()->getMultiple(['name.0', 'name.1']);
@@ -108,156 +108,160 @@ class MemoizedStoreTest extends TestCase
 
     public function testItCanRetrieveAlreadyMemoizedAndNotYetMemoizedValuesWhenRetrievingMulitpleValues()
     {
-        Cache::put('name.0', 'Tim');
-        Cache::put('name.1', 'Taylor');
+        Cache::put('name.0', 'Tim', 60);
+        Cache::put('name.1', 'Taylor', 60);
 
         $live = Cache::get('name.0');
         $memoized = Cache::memo()->get('name.0');
-        $this->assertSame('Tim', $value);
+        $this->assertSame('Tim', $live);
         $this->assertSame('Tim', $memoized);
 
-        Cache::put('name.0', 'MacDonald');
+        Cache::put('name.0', 'MacDonald', 60);
+        Cache::put('name.1', 'Otwell', 60);
 
-        $live = Cache::get(['name.0', 'name.1']);
-        $memoized = Cache::memo()->get(['name.0', 'name.1']);
-
-        $this->assertSame('Tim', $value);
-        $this->assertSame(['name.0' => 'Tim', 'name.1' => 'Taylor'], $values);
-        $this->assertSame(['name.0' => 'Tim', 'name.1' => 'Taylor'], Cache::memo('redis')->getMultiple(['name.0', 'name.1']));
-        $this->assertSame(['name.0' => 'MacDonald', 'name.1' => 'Otwell'], $redis->getMultiple(['name.0', 'name.1']));
+        $live = Cache::getMultiple(['name.0', 'name.1']);
+        $memoized = Cache::memo()->getMultiple(['name.0', 'name.1']);
+        $this->assertSame(['name.0' => 'MacDonald', 'name.1' => 'Otwell'], $live);
+        $this->assertSame(['name.0' => 'Tim', 'name.1' => 'Otwell'], $memoized);
     }
 
     public function testPutForgetsMemoizedValue()
     {
-        $redis = Cache::store('redis');
+        Cache::memo()->put('name', 'Tim', 60);
 
-        Cache::memo('redis')->put('name', 'Tim', 60);
-        $value = Cache::memo('redis')->get('name');
-        $this->assertSame('Tim', $value);
+        $live = Cache::get('name');
+        $memoized = Cache::memo()->get('name');
+        $this->assertSame('Tim', $live);
+        $this->assertSame('Tim', $memoized);
 
-        Cache::memo('redis')->put('name', 'Taylor', 60);
-        $value = Cache::memo('redis')->get('name');
-        $this->assertSame('Taylor', $value);
-    }
+        Cache::memo()->put('name', 'Taylor', 60);
 
-    public function testPutUpdatesAlreadyMemoizedValues()
-    {
-        $redis = Cache::store('redis');
-
-        $redis->put('name', 'Tim');
-        $this->assertSame('Tim', Cache::memo('redis')->get('name'));
-        $this->assertSame('Tim', $redis->get('name'));
-
-        Cache::memo('redis')->put('name', 'Taylor', 60);
-        $this->assertSame('Taylor', Cache::memo('redis')->get('name'));
-        $this->assertSame('Taylor', $redis->get('name'));
+        $live = Cache::get('name');
+        $memoized = Cache::memo()->get('name');
+        $this->assertSame('Taylor', $live);
+        $this->assertSame('Taylor', $memoized);
     }
 
     public function testPutManyForgetsMemoizedValue()
     {
-        $redis = Cache::store('redis');
+        Cache::memo()->put(['name.0' => 'Tim', 'name.1' => 'Taylor'], 60);
 
-        Cache::memo('redis')->put(['name.0' => 'Tim', 'name.1' => 'Taylor'], 60);
-        $this->assertSame('Tim', $redis->get('name.0'));
-        $this->assertSame('Taylor', $redis->get('name.1'));
+        $live = Cache::get(['name.0', 'name.1']);
+        $memoized = Cache::memo()->get(['name.0', 'name.1']);
+        $this->assertSame(['name.0' => 'Tim', 'name.1' => 'Taylor'], $live);
+        $this->assertSame(['name.0' => 'Tim', 'name.1' => 'Taylor'], $memoized);
 
-        $redis->put(['name.0' => 'MacDonald', 'name.1' => 'Otwell'], 60);
-        $this->assertSame(['name.0' => 'Tim', 'name.1' => 'Taylor'], Cache::memo('redis')->get(['name.0', 'name.1']));
-        $this->assertSame(['name.0' => 'MacDonald', 'name.1' => 'Otwell'], $redis->get(['name.0', 'name.1']));
+        Cache::memo()->put(['name.0' => 'MacDonald'], 60);
+
+        $live = Cache::get(['name.0', 'name.1']);
+        $memoized = Cache::memo()->get(['name.0', 'name.1']);
+        $this->assertSame(['name.0' => 'MacDonald', 'name.1' => 'Taylor'], $live);
+        $this->assertSame(['name.0' => 'MacDonald', 'name.1' => 'Taylor'], $memoized);
     }
 
-    public function testItMemoizesIncrement()
+    public function testIncrementForgetsMemoizedValue()
     {
-        $redis = Cache::store('redis');
-        $redis->put('count', 1);
+        Cache::put('count', 1, 60);
 
-        $value = Cache::memo('redis')->increment('count');
-        $this->assertSame(2, $value);
-        $this->assertSame('2', $redis->get('count'));
+        $live = Cache::get('count');
+        $memoized = Cache::memo()->get('count');
+        $this->assertSame('1', $live);
+        $this->assertSame('1', $memoized);
 
-        $redis->increment('count');
-        $this->assertSame('2', Cache::memo('redis')->get('count'));
-        $this->assertSame('3', $redis->get('count'));
+        Cache::memo()->increment('count');
+
+        $live = Cache::get('count');
+        $memoized = Cache::memo()->get('count');
+        $this->assertSame('2', $live);
+        $this->assertSame('2', $memoized);
     }
 
-    public function testItMemoizesDecrement()
+    public function testDecrementForgetsMemoizedValue()
     {
-        $redis = Cache::store('redis');
-        $redis->put('count', 3);
+        Cache::put('count', 1, 60);
 
-        $value = Cache::memo('redis')->decrement('count');
-        $this->assertSame(2, $value);
-        $this->assertSame('2', $redis->get('count'));
+        $live = Cache::get('count');
+        $memoized = Cache::memo()->get('count');
+        $this->assertSame('1', $live);
+        $this->assertSame('1', $memoized);
 
-        $redis->decrement('count');
-        $this->assertSame('2', Cache::memo('redis')->get('count'));
-        $this->assertSame('1', $redis->get('count'));
+        Cache::memo()->decrement('count');
+
+        $live = Cache::get('count');
+        $memoized = Cache::memo()->get('count');
+        $this->assertSame('0', $live);
+        $this->assertSame('0', $memoized);
     }
 
-    public function testItMemoizesForever()
+    public function testForeverForgetsMemoizedValue()
     {
-        $redis = Cache::store('redis');
+        Cache::put('name', 'Tim', 60);
 
-        $result = Cache::memo('redis')->forever('name', 'Tim');
-        $this->assertTrue($result);
-        $this->assertSame('Tim', $redis->get('name'));
+        $live = Cache::get('name');
+        $memoized = Cache::memo()->get('name');
+        $this->assertSame('Tim', $live);
+        $this->assertSame('Tim', $memoized);
 
-        $redis->forever('name', 'Taylor');
-        $this->assertSame('Tim', Cache::memo('redis')->get('name'));
-        $this->assertSame('Taylor', $redis->get('name'));
+        Cache::memo()->forever('name', 'Taylor');
+
+        $live = Cache::get('name');
+        $memoized = Cache::memo()->get('name');
+        $this->assertSame('Taylor', $live);
+        $this->assertSame('Taylor', $memoized);
     }
 
-    public function testItForgetsMemoizedValues()
+    public function testForgetForgetsMemoizedValue()
     {
-        $redis = Cache::store('redis');
-        $redis->put('name', 'Tim');
+        Cache::put('name', 'Tim', 60);
 
-        $value = Cache::memo('redis')->get('name');
-        $this->assertSame('Tim', $value);
+        $live = Cache::get('name');
+        $memoized = Cache::memo()->get('name');
+        $this->assertSame('Tim', $live);
+        $this->assertSame('Tim', $memoized);
 
-        Cache::memo('redis')->forget('name');
-        $value = Cache::memo('redis')->get('name');
-        $this->assertNull($value);
-        $value = $redis->get('name');
-        $this->assertNull($value);
+        Cache::memo()->forget('name');
+
+        $live = Cache::get('name');
+        $memoized = Cache::memo()->get('name');
+        $this->assertNull($live);
+        $this->assertNull($memoized);
     }
 
-    public function testItFlushesMemoizedValues()
+    public function testFlushForgetsMemoizedValue()
     {
-        $redis = Cache::store('redis');
+        Cache::put(['name.0' => 'Tim', 'name.1' => 'Taylor'], 60);
 
-        Cache::memo('redis')->put('name.0', 'Tim');
-        Cache::memo('redis')->put('name.1', 'Tim');
+        $live = Cache::get(['name.0', 'name.1']);
+        $memoized = Cache::memo()->get(['name.0', 'name.1']);
+        $this->assertSame(['name.0' => 'Tim', 'name.1' => 'Taylor'], $live);
+        $this->assertSame(['name.0' => 'Tim', 'name.1' => 'Taylor'], $memoized);
 
-        Cache::memo('redis')->flush();
+        Cache::memo()->flush();
 
-        $value = Cache::memo('redis')->get('name.0');
-        $this->assertNull($value);
-        $value = Cache::memo('redis')->get('name.1');
-        $this->assertNull($value);
-        $value = $redis->get('name.0');
-        $this->assertNull($value);
-        $value = $redis->get('name.1');
-        $this->assertNull($value);
+        $live = Cache::get(['name.0', 'name.1']);
+        $memoized = Cache::memo()->get(['name.0', 'name.1']);
+        $this->assertSame(['name.0' => null, 'name.1' => null], $live);
+        $this->assertSame(['name.0' => null, 'name.1' => null], $memoized);
     }
 
-    public function testMemoizedDriverGetsPrefix()
+    public function testMemoizedDriverUsesUnderlyingDriversPrefix()
     {
-        $this->assertSame('laravel_cache_', Cache::memo('redis')->getPrefix());
+        $this->assertSame('laravel_cache_', Cache::memo()->getPrefix());
 
         Cache::driver('redis')->setPrefix('foo');
 
-        $this->assertSame('foo', Cache::memo('redis')->getPrefix());
+        $this->assertSame('foo', Cache::memo()->getPrefix());
     }
 
     public function testMemoizedKeysArePrefixed()
     {
+        // HERE
         $redis = Cache::store('redis');
 
         $redis->setPrefix('aaaa');
-        $redis->put('name', 'Tim');
+        $redis->put('name', 'Tim', 60);
         $redis->setPrefix('zzzz');
-        $redis->put('name', 'Taylor');
+        $redis->put('name', 'Taylor', 60);
 
         $redis->setPrefix('aaaa');
         $value = Cache::memo('redis')->get('name');
