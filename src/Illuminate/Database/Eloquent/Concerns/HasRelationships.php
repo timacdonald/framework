@@ -56,6 +56,24 @@ trait HasRelationships
     protected static $relationResolvers = [];
 
     /**
+     * Callback for guessing relationhip foreign keys.
+     *
+     * @var ?callable
+     */
+    protected static $guessForeignKeyUsing;
+
+    /**
+     * Guess foreign key for relationships.
+     *
+     * @param  callable  $callback
+     * @return void
+     */
+    public static function guessForeignKeyUsing($callback)
+    {
+        static::$guessForeignKeyUsing = $callback;
+    }
+
+    /**
      * Get the dynamic relation resolver if defined or inherited, or return null.
      *
      * @template TRelatedModel of \Illuminate\Database\Eloquent\Model
@@ -106,7 +124,7 @@ trait HasRelationships
     {
         $instance = $this->newRelatedInstance($related);
 
-        $foreignKey = $foreignKey ?: $this->getForeignKey();
+        $foreignKey = $foreignKey ?: ((static::$guessForeignKeyUsing)($instance, $related) ?? $this->getForeignKey());
 
         $localKey = $localKey ?: $this->getKeyName();
 
@@ -251,7 +269,7 @@ trait HasRelationships
         // foreign key name by using the name of the relationship function, which
         // when combined with an "_id" should conventionally match the columns.
         if (is_null($foreignKey)) {
-            $foreignKey = Str::snake($relation).'_'.$instance->getKeyName();
+            $foreignKey = (static::$guessForeignKeyUsing)($instance, $related) ?? Str::snake($relation).'_'.$instance->getKeyName();
         }
 
         // Once we have the foreign key names we'll just create a new Eloquent query
@@ -428,7 +446,7 @@ trait HasRelationships
     {
         $instance = $this->newRelatedInstance($related);
 
-        $foreignKey = $foreignKey ?: $this->getForeignKey();
+        $foreignKey = $foreignKey ?: ((static::$guessForeignKeyUsing)($instance, $related) ?? $this->getForeignKey());
 
         $localKey = $localKey ?: $this->getKeyName();
 

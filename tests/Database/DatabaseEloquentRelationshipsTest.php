@@ -258,6 +258,25 @@ class DatabaseEloquentRelationshipsTest extends TestCase
         $this->assertSame('environments.pro_id', $higher->getQualifiedFirstKeyName());
         $this->assertSame('environments.pro_id', $fluent->getQualifiedFirstKeyName());
     }
+
+    public function test_it_can_customise_guessing_the_foreign_key()
+    {
+        Model::guessForeignKeyUsing(function (Model $model, string $relation) {
+            $this->assertInstanceOf(EngineType::class, $model);
+            $this->assertSame(EngineType::class, $relation);
+
+             return 'foo_bar';
+        });
+
+        $relationship = (new Car)->engineType();
+        $this->assertSame('foo_bar', $relationship->getForeignKeyName());
+
+        $relationship = (new Car)->engineTypes();
+        $this->assertSame('foo_bar', $relationship->getForeignKeyName());
+
+        $relationship = (new LicensePlate())->car();
+        $this->assertSame('foo_bar', $relationship->getForeignKeyName());
+    }
 }
 
 class FakeRelationship extends Model
@@ -448,6 +467,24 @@ class Car extends MockedConnectionModel
     public function owner()
     {
         return $this->hasOne(Owner::class, 'car_id', 'c_id');
+    }
+
+    public function engineType()
+    {
+        return $this->hasOne(EngineType::class);
+    }
+
+    public function engineTypes()
+    {
+        return $this->hasMany(EngineType::class);
+    }
+}
+
+class LicensePlate extends Model
+{
+    public function car()
+    {
+        return $this->belongsTo(Car::class);
     }
 }
 
