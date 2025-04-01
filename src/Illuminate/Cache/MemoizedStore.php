@@ -52,13 +52,13 @@ class MemoizedStore implements Store
      */
     public function many(array $keys)
     {
-        $prefixedKey = $this->prefix($key);
-
         $memoized = [];
         $retrieved = [];
         $missing = [];
 
         foreach ($keys as $key) {
+            $prefixedKey = $this->prefix($key);
+
             if (array_key_exists($prefixedKey, $this->cache)) {
                 $memoized[$key] = $this->cache[$prefixedKey];
             } else {
@@ -71,7 +71,7 @@ class MemoizedStore implements Store
                 $this->cache = [
                     ...$this->cache,
                     ...collect($values)->mapWithKeys(fn ($value, $key) => [
-                        $prefixedKey => $value,
+                        $this->prefix($key) => $value,
                     ]),
                 ];
             });
@@ -177,11 +177,9 @@ class MemoizedStore implements Store
      */
     public function flush()
     {
-        return tap($this->repository->flush(), function ($result) {
-            if ($result) {
-                $this->cache = [];
-            }
-        });
+        $this->cache = [];
+
+        return $this->repository->flush();
     }
 
     /**

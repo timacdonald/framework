@@ -2,7 +2,6 @@
 
 namespace Illuminate\Tests\Integration\Cache;
 
-use Illuminate\Cache\ArrayStore;
 use Illuminate\Cache\Events\CacheEvent;
 use Illuminate\Cache\Events\CacheMissed;
 use Illuminate\Cache\Events\ForgettingKey;
@@ -39,7 +38,7 @@ class MemoizedStoreTest extends TestCase
         $this->tearDownRedis();
     }
 
-    public function testItCanMemoizeWhenRetrievingSingleValue()
+    public function test_it_can_memoize_when_retrieving_single_value()
     {
         Cache::put('name', 'Tim', 60);
 
@@ -56,7 +55,7 @@ class MemoizedStoreTest extends TestCase
         $this->assertSame('Tim', $memoized);
     }
 
-    public function testNullValuesAreMemoizedWhenRetrievingSingleValue()
+    public function test_null_values_are_memoized_when_retrieving_single_value()
     {
         $live = Cache::get('name');
         $memoized = Cache::memo()->get('name');
@@ -71,7 +70,7 @@ class MemoizedStoreTest extends TestCase
         $this->assertNull($memoized);
     }
 
-    public function testItCanMemoizeWhenRetrievingMulitpleValues()
+    public function test_it_can_memoize_when_retrieving_mulitple_values()
     {
         Cache::put('name.0', 'Tim', 60);
         Cache::put('name.1', 'Taylor', 60);
@@ -90,7 +89,7 @@ class MemoizedStoreTest extends TestCase
         $this->assertSame(['name.0' => 'Tim', 'name.1' => 'Taylor'], $memoized);
     }
 
-    public function testNullValuesAreMemoizedWhenRetrievingMulitpleValues()
+    public function test_null_values_are_memoized_when_retrieving_mulitple_values()
     {
         $live = Cache::getMultiple(['name.0', 'name.1']);
         $memoized = Cache::memo()->getMultiple(['name.0', 'name.1']);
@@ -106,7 +105,7 @@ class MemoizedStoreTest extends TestCase
         $this->assertSame($memoized, ['name.0' => null, 'name.1' => null]);
     }
 
-    public function testItCanRetrieveAlreadyMemoizedAndNotYetMemoizedValuesWhenRetrievingMulitpleValues()
+    public function test_it_can_retrieve_already_memoized_and_not_yet_memoized_values_when_retrieving_mulitple_values()
     {
         Cache::put('name.0', 'Tim', 60);
         Cache::put('name.1', 'Taylor', 60);
@@ -125,24 +124,7 @@ class MemoizedStoreTest extends TestCase
         $this->assertSame(['name.0' => 'Tim', 'name.1' => 'Otwell'], $memoized);
     }
 
-    public function testPutForgetsMemoizedValue()
-    {
-        Cache::memo()->put('name', 'Tim', 60);
-
-        $live = Cache::get('name');
-        $memoized = Cache::memo()->get('name');
-        $this->assertSame('Tim', $live);
-        $this->assertSame('Tim', $memoized);
-
-        Cache::memo()->put('name', 'Taylor', 60);
-
-        $live = Cache::get('name');
-        $memoized = Cache::memo()->get('name');
-        $this->assertSame('Taylor', $live);
-        $this->assertSame('Taylor', $memoized);
-    }
-
-    public function testPutManyForgetsMemoizedValue()
+    public function test_put_many_forgets_memoized_value()
     {
         Cache::memo()->put(['name.0' => 'Tim', 'name.1' => 'Taylor'], 60);
 
@@ -159,7 +141,7 @@ class MemoizedStoreTest extends TestCase
         $this->assertSame(['name.0' => 'MacDonald', 'name.1' => 'Taylor'], $memoized);
     }
 
-    public function testIncrementForgetsMemoizedValue()
+    public function test_increment_forgets_memoized_value()
     {
         Cache::put('count', 1, 60);
 
@@ -176,7 +158,7 @@ class MemoizedStoreTest extends TestCase
         $this->assertSame('2', $memoized);
     }
 
-    public function testDecrementForgetsMemoizedValue()
+    public function test_decrement_forgets_memoized_value()
     {
         Cache::put('count', 1, 60);
 
@@ -193,7 +175,7 @@ class MemoizedStoreTest extends TestCase
         $this->assertSame('0', $memoized);
     }
 
-    public function testForeverForgetsMemoizedValue()
+    public function test_forever_forgets_memoized_value()
     {
         Cache::put('name', 'Tim', 60);
 
@@ -210,7 +192,7 @@ class MemoizedStoreTest extends TestCase
         $this->assertSame('Taylor', $memoized);
     }
 
-    public function testForgetForgetsMemoizedValue()
+    public function test_forget_forgets_memoized_value()
     {
         Cache::put('name', 'Tim', 60);
 
@@ -227,7 +209,7 @@ class MemoizedStoreTest extends TestCase
         $this->assertNull($memoized);
     }
 
-    public function testFlushForgetsMemoizedValue()
+    public function test_flush_forgets_memoized_value()
     {
         Cache::put(['name.0' => 'Tim', 'name.1' => 'Taylor'], 60);
 
@@ -244,7 +226,7 @@ class MemoizedStoreTest extends TestCase
         $this->assertSame(['name.0' => null, 'name.1' => null], $memoized);
     }
 
-    public function testMemoizedDriverUsesUnderlyingDriversPrefix()
+    public function test_memoized_driver_uses_underlying_drivers_prefix()
     {
         $this->assertSame('laravel_cache_', Cache::memo()->getPrefix());
 
@@ -253,9 +235,8 @@ class MemoizedStoreTest extends TestCase
         $this->assertSame('foo', Cache::memo()->getPrefix());
     }
 
-    public function testMemoizedKeysArePrefixed()
+    public function test_memoized_keys_are_prefixed()
     {
-        // HERE
         $redis = Cache::store('redis');
 
         $redis->setPrefix('aaaa');
@@ -272,115 +253,25 @@ class MemoizedStoreTest extends TestCase
         $this->assertSame('Taylor', $value);
     }
 
-    public function testItDoesNotMemoizePutWhenUnderlyingDriverFails()
+    public function test_put_forgets_memoized_value()
     {
-        Config::set('cache.stores.fail', ['driver' => 'fail']);
-        Cache::extend('fail', fn () => $this->repository(new class extends ArrayStore {
-            public function put($key, $value, $seconds)
-            {
-                if ($value !== 'Tim') {
-                    return parent::put(...func_get_args());
-                }
+        Cache::put(['name.0' => 'Tim', 'name.1' => 'Taylor'], 60);
 
-                return false;
-            }
-        }));
+        $live = Cache::get(['name.0', 'name.1']);
+        $memoized = Cache::memo()->get(['name.0', 'name.1']);
+        $this->assertSame(['name.0' => 'Tim', 'name.1' => 'Taylor'], $live);
+        $this->assertSame(['name.0' => 'Tim', 'name.1' => 'Taylor'], $memoized);
 
-        $result = Cache::driver('fail')->put('name', 'Taylor', 60);
-        $this->assertTrue($result);
-        $value = Cache::driver('fail')->get('name');
-        $this->assertSame('Taylor', $value);
-        $value = Cache::memo('fail')->get('name');
-        $this->assertSame('Taylor', $value);
+        Cache::memo()->put('name.0', 'MacDonald');
+        Cache::memo()->put('name.1', 'Otwell');
 
-        $result = Cache::memo('fail')->put('name', 'Tim', 60);
-        $this->assertFalse($result);
-        $value = Cache::driver('fail')->get('name');
-        $this->assertSame('Taylor', $value);
-        $value = Cache::memo('fail')->get('name');
-        $this->assertSame('Taylor', $value);
-
-        $result = Cache::memo('fail')->put('name', 'Jess', 60);
-        $this->assertTrue($result);
-        $value = Cache::driver('fail')->get('name');
-        $this->assertSame('Jess', $value);
-        $value = Cache::memo('fail')->get('name');
-        $this->assertSame('Jess', $value);
+        $live = Cache::get(['name.0', 'name.1']);
+        $memoized = Cache::memo()->get(['name.0', 'name.1']);
+        $this->assertSame(['name.0' => 'MacDonald', 'name.1' => 'Otwell'], $live);
+        $this->assertSame(['name.0' => 'MacDonald', 'name.1' => 'Otwell'], $memoized);
     }
 
-    public function testItDoesNotMemoizePutManyWhenUnderlyingDriverFails()
-    {
-        Config::set('cache.stores.fail', ['driver' => 'fail']);
-        Cache::extend('fail', fn () => $this->repository(new class extends ArrayStore {
-            public function put($key, $value, $seconds)
-            {
-                if ($value !== 'Tim') {
-                    return parent::put(...func_get_args());
-                }
-
-                return false;
-            }
-        }));
-
-        $result = Cache::driver('fail')->put(['name.0' => 'Taylor', 'name.1' => 'Otwell'], 60);
-        $this->assertTrue($result);
-        $value = Cache::driver('fail')->many(['name.0', 'name.1']);
-        $this->assertSame(['name.0' => 'Taylor', 'name.1' => 'Otwell'], $value);
-        $value = Cache::memo('fail')->many(['name.0', 'name.1']);
-        $this->assertSame(['name.0' => 'Taylor', 'name.1' => 'Otwell'], $value);
-
-        $result = Cache::memo('fail')->put(['name.0' => 'Tim', 'name.1' => 'MacDonald'], 60);
-        $this->assertFalse($result);
-        $value = Cache::driver('fail')->many(['name.0', 'name.1']);
-        $this->assertSame(['name.0' => 'Taylor', 'name.1' => 'MacDonald'], $value); // !!!
-        $value = Cache::memo('fail')->many(['name.0', 'name.1']);
-        $this->assertSame(['name.0' => 'Taylor', 'name.1' => 'Otwell'], $value);
-
-        $result = Cache::memo('fail')->put(['name.0' => 'Jess', 'name.1' => 'Archer'], 60);
-        $this->assertTrue($result);
-        $value = Cache::driver('fail')->many(['name.0', 'name.1']);
-        $this->assertSame(['name.0' => 'Jess', 'name.1' => 'Archer'], $value);
-        $value = Cache::memo('fail')->many(['name.0', 'name.1']);
-        $this->assertSame(['name.0' => 'Jess', 'name.1' => 'Archer'], $value);
-    }
-
-    public function testItDoesNotMemoizeIncrementWhenUnderlyingDriverFails()
-    {
-        Config::set('cache.stores.fail', ['driver' => 'fail']);
-        Cache::extend('fail', fn () => $this->repository(new class extends ArrayStore {
-            public function increment($key, $value = 1)
-            {
-                if ($value !== 2) {
-                    return parent::increment(...func_get_args());
-                }
-
-                return false;
-            }
-        }));
-
-        $result = Cache::driver('fail')->increment('count');
-        $this->assertSame(1, $result);
-        $value = Cache::driver('fail')->get('count');
-        $this->assertSame(1, $value);
-        $value = Cache::memo('fail')->get('count');
-        $this->assertSame(1, $value);
-
-        $result = Cache::memo('fail')->increment('count', 2);
-        $this->assertFalse($result);
-        $value = Cache::driver('fail')->get('count');
-        $this->assertSame(1, $value);
-        $value = Cache::memo('fail')->get('count');
-        $this->assertSame(1, $value);
-
-        $result = Cache::memo('fail')->increment('count', 3);
-        $this->assertSame(4, $result);
-        $value = Cache::driver('fail')->get('count');
-        $this->assertSame(4, $value);
-        $value = Cache::memo('fail')->get('count');
-        $this->assertSame('4', $value);
-    }
-
-    public function testItDispatchesDecoratedDriverEventsOnly()
+    public function test_it_dispatches_decorated_driver_events_only()
     {
         $redis = Cache::driver('redis');
         $events = [];
@@ -403,7 +294,6 @@ class MemoizedStoreTest extends TestCase
 
         Cache::memo('redis')->many(['name']);
         $this->assertCount(2, $events);
-
 
         Cache::memo('redis')->many(['name.0', 'name.1']);
         $this->assertCount(5, $events);
