@@ -361,4 +361,22 @@ class MemoizedStoreTest extends TestCase
         Cache::memo('redis')->flush();
         $this->assertCount(15, $events);
     }
+
+    public function test_it_resets_cache_store_with_scoped_instances()
+    {
+        Cache::put('name', 'Tim', 60);
+
+        $live = Cache::get('name');
+        $memoized = Cache::memo()->get('name');
+        $this->assertSame('Tim', $live);
+        $this->assertSame('Tim', $memoized);
+
+        Cache::put('name', 'Taylor', 60);
+        $this->app->forgetScopedInstances();
+
+        $live = Cache::get('name');
+        $memoized = Cache::memo()->get('name');
+        $this->assertSame('Taylor', $live);
+        $this->assertSame('Taylor', $memoized);
+    }
 }
