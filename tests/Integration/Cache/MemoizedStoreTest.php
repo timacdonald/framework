@@ -282,7 +282,6 @@ class MemoizedStoreTest extends TestCase
 
     public function test_memoized_keys_are_prefixed()
     {
-        // HERE
         $redis = Cache::store('redis');
 
         $redis->setPrefix('aaaa');
