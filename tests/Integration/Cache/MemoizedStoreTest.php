@@ -124,6 +124,24 @@ class MemoizedStoreTest extends TestCase
         $this->assertSame(['name.0' => 'Tim', 'name.1' => 'Otwell'], $memoized);
     }
 
+    public function test_put_forgets_memoized_value()
+    {
+        Cache::put(['name.0' => 'Tim', 'name.1' => 'Taylor'], 60);
+
+        $live = Cache::get(['name.0', 'name.1']);
+        $memoized = Cache::memo()->get(['name.0', 'name.1']);
+        $this->assertSame(['name.0' => 'Tim', 'name.1' => 'Taylor'], $live);
+        $this->assertSame(['name.0' => 'Tim', 'name.1' => 'Taylor'], $memoized);
+
+        Cache::memo()->put('name.0', 'MacDonald');
+        Cache::memo()->put('name.1', 'Otwell');
+
+        $live = Cache::get(['name.0', 'name.1']);
+        $memoized = Cache::memo()->get(['name.0', 'name.1']);
+        $this->assertSame(['name.0' => 'MacDonald', 'name.1' => 'Otwell'], $live);
+        $this->assertSame(['name.0' => 'MacDonald', 'name.1' => 'Otwell'], $memoized);
+    }
+
     public function test_put_many_forgets_memoized_value()
     {
         Cache::memo()->put(['name.0' => 'Tim', 'name.1' => 'Taylor'], 60);
@@ -251,24 +269,6 @@ class MemoizedStoreTest extends TestCase
         $redis->setPrefix('zzzz');
         $value = Cache::memo('redis')->get('name');
         $this->assertSame('Taylor', $value);
-    }
-
-    public function test_put_forgets_memoized_value()
-    {
-        Cache::put(['name.0' => 'Tim', 'name.1' => 'Taylor'], 60);
-
-        $live = Cache::get(['name.0', 'name.1']);
-        $memoized = Cache::memo()->get(['name.0', 'name.1']);
-        $this->assertSame(['name.0' => 'Tim', 'name.1' => 'Taylor'], $live);
-        $this->assertSame(['name.0' => 'Tim', 'name.1' => 'Taylor'], $memoized);
-
-        Cache::memo()->put('name.0', 'MacDonald');
-        Cache::memo()->put('name.1', 'Otwell');
-
-        $live = Cache::get(['name.0', 'name.1']);
-        $memoized = Cache::memo()->get(['name.0', 'name.1']);
-        $this->assertSame(['name.0' => 'MacDonald', 'name.1' => 'Otwell'], $live);
-        $this->assertSame(['name.0' => 'MacDonald', 'name.1' => 'Otwell'], $memoized);
     }
 
     public function test_it_dispatches_decorated_driver_events_only()
