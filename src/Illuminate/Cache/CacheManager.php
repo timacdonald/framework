@@ -82,9 +82,7 @@ class CacheManager implements FactoryContract
     {
         $driver = $driver ?: $this->getDefaultDriver();
 
-        $bindingKey = "cache.__memoized:{$driver}";
-
-        if (! $this->app->bound($bindingKey)) {
+        if (! $this->app->bound($bindingKey = "cache.__memoized:{$driver}")) {
             $this->app->scoped($bindingKey, fn () => $this->repository(
                 new MemoizedStore($driver, $this->store($driver)), ['events' => false]
             ));
