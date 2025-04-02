@@ -2,6 +2,7 @@
 
 namespace Illuminate\Tests\Integration\Cache;
 
+use DateInterval;
 use Illuminate\Foundation\Testing\Concerns\InteractsWithRedis;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Config;
@@ -21,20 +22,15 @@ class CacheObjectTest extends TestCase
         Config::set('cache.default', 'redis');
         Redis::flushAll();
 
+        // TODO make sure actual `value` method can infer the return
+        // type of cacheables.
         Cache::macro('value', function (Cacheable $cacheable) {
             $key = $cacheable->cacheKey();
+            $ttl = $cacheable->cacheTtl();
 
-            $value = Cache::get($key);
-
-            if ($value === null) {
-                $value = $cacheable->toCacheValue();
-
-                Cache::put($key, $value);
-
-                return $cacheable->fromCacheValue($value);
-            }
-
-            return $cacheable->fromCacheValue($value);
+            return $cacheable->fromCacheValue(
+                $this->remember($key, $ttl, fn () => $cacheable->toCacheValue())
+            );
         });
     }
 
@@ -55,6 +51,16 @@ class CacheObjectTest extends TestCase
             {
                 return 'bdfl.name';
             }
+
+            public function cacheTtl(): int
+            {
+                return 1;
+            }
+
+            public function toCacheValue(): ?string
+            {
+                return null;
+            }
         };
 
         Cache::put('bdfl.name', 'Taylor');
@@ -73,14 +79,19 @@ class CacheObjectTest extends TestCase
         {
             use IsCacheable;
 
-            public function toCacheValue(): mixed
-            {
-                return now()->getTimestamp();
-            }
-
             public function cacheKey(): string
             {
                 return 'time';
+            }
+
+            public function cacheTtl(): int
+            {
+                return 1;
+            }
+
+            public function toCacheValue(): mixed
+            {
+                return now()->getTimestamp();
             }
         };
 
@@ -105,9 +116,14 @@ class CacheObjectTest extends TestCase
         {
             use IsCacheable;
 
-            public function fromCacheValue(mixed $value): mixed
+            public function cacheKey(): string
             {
-                return "{$value} Otwell";
+                return 'bdfl.name';
+            }
+
+            public function cacheTtl(): int
+            {
+                return 1;
             }
 
             public function toCacheValue(): mixed
@@ -115,9 +131,9 @@ class CacheObjectTest extends TestCase
                 return 'Taylor';
             }
 
-            public function cacheKey(): string
+            public function fromCacheValue(mixed $value): mixed
             {
-                return 'bdfl.name';
+                return "{$value} Otwell";
             }
         };
 
@@ -141,9 +157,14 @@ class CacheObjectTest extends TestCase
                 sort($this->attributes);
             }
 
-            public function fromCacheValue(array $value)
+            public function cacheKey(): string
             {
-                return (object) $value;
+                return "user:{$this->id}:".implode(',', $this->attributes);
+            }
+
+            public function cacheTtl(): int
+            {
+                return 1;
             }
 
             public function toCacheValue()
@@ -155,9 +176,9 @@ class CacheObjectTest extends TestCase
                 ], array_flip($this->attributes));
             }
 
-            public function cacheKey(): string
+            public function fromCacheValue(array $value)
             {
-                return "user:{$this->id}:".implode(',', $this->attributes);
+                return (object) $value;
             }
         };
         $userOneWithoutFrameworkCacheable = $userCacheableFactory(1, ['name', 'email']);
@@ -184,7 +205,74 @@ class CacheObjectTest extends TestCase
         ]);
     }
 
-    public function test_it_can_set_a_ttl() {}
+    public function test_it_can_set_a_ttl()
+    {
+        $object = new class implements Cacheable
+        {
+            use IsCacheable;
+
+            public function toCacheValue(): mixed
+            {
+                return 'Taylor';
+            }
+
+            public function cacheKey(): string
+            {
+                return 'bdfl.name';
+            }
+
+            public function cacheTtl(): DateTimeInterface|DateInterval|int
+            {
+                return 1;
+            }
+        };
+
+        $result = Cache::value($object);
+        $valueInCache = Cache::get('bdfl.name');
+
+        $this->assertSame('Taylor', $result);
+        $this->assertSame('Taylor', $valueInCache);
+
+        sleep(1);
+        $valueInCache = Cache::get('bdfl.name');
+
+        $this->assertNull($valueInCache);
+    }
+
+    public function test_it_can_invalidate_cache()
+    {
+        $this->markTestIncomplete();
+    }
+
+    public function test_it_can_be_nicely_tied_into_eloquent_events_to_stay_up_to_date()
+    {
+        $this->markTestIncomplete();
+    }
+
+    public function test_it_can_use_memo()
+    {
+        $this->markTestIncomplete();
+    }
+
+    public function test_it_can_use_flexible()
+    {
+        $this->markTestIncomplete();
+    }
+
+    public function test_it_has_access_to_the_cache_driver_on_the_object()
+    {
+        $this->markTestIncomplete();
+    }
+
+    public function test_it_can_use_method_injection()
+    {
+        $this->markTestIncomplete();
+    }
+
+    public function test_it_can_be_used_with_locks_and_other_cache_features()
+    {
+        $this->markTestIncomplete('Dunno about this');
+    }
 }
 
 interface Cacheable
