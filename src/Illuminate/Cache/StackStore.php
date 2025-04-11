@@ -33,7 +33,6 @@ class StackStore implements Store
     public function get($key)
     {
         foreach ($this->stack as $index => $repository) {
-            $timestamp = now()->getTimestamp();
             $value = $repository->get($key);
 
             if ($value === null) {
