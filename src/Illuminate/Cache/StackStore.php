@@ -11,17 +11,21 @@ use RuntimeException;
 class StackStore implements Store
 {
     /**
-     * @param  Collection<int, Repository>  $stack
+     * @param  Collection<int, Repository>  $repositories
      */
     public function __construct(
-        protected Collection $stack
+        protected Collection $repositories
     ) {
-        $supported = $this->stack->every(
-            fn ($repository) => $repository->getStore() instanceof RetrievesTTL
-        );
+        if ($repositories->isEmpty()) {
+            throw new RuntimeException('There must be at least one driver in the stack.');
+        }
+
+        $supported = $this->repositories
+            ->skip(1)
+            ->every(fn ($repository) => $repository->getStore() instanceof RetrievesTTL);
 
         if (! $supported) {
-            throw new RuntimeException('All stores in the stack must support retrieving TTLs.');
+            throw new RuntimeException('Nested stores in the stack must implement the ['.RetrievesTTL::class.'] interface.');
         }
     }
     /**
@@ -32,12 +36,18 @@ class StackStore implements Store
      */
     public function get($key)
     {
-        foreach ($this->stack as $index => $repository) {
+        foreach ($this->repositories as $index => $repository) {
             $value = $repository->get($key);
 
             if ($value === null) {
                 continue;
             }
+
+            if ($index === 0) {
+                return $value;
+            }
+
+            /** @var Repository&RetrievesTTL $repository */
 
             $ttl = $repository->ttlInSeconds($key);
 
@@ -48,7 +58,7 @@ class StackStore implements Store
             return null;
         }
 
-        foreach ($this->stack->take($index) as $repository) {
+        foreach ($this->repositories->take($index) as $repository) {
             $repository->put($key, $value, $ttl);
         }
 
@@ -65,7 +75,7 @@ class StackStore implements Store
      */
     public function many(array $keys)
     {
-        //
+        // TODO
     }
 
     /**
@@ -78,7 +88,9 @@ class StackStore implements Store
      */
     public function put($key, $value, $seconds)
     {
-        //
+        return $this->repositories
+            ->map->put($key, $value, $seconds)
+            ->every(fn ($result) => $result);
     }
 
     /**
@@ -90,7 +102,9 @@ class StackStore implements Store
      */
     public function putMany(array $values, $seconds)
     {
-        //
+        return $this->repositories
+            ->map->putMany($values, $seconds)
+            ->every(fn ($result) => $result);
     }
 
     /**
@@ -102,7 +116,8 @@ class StackStore implements Store
      */
     public function increment($key, $value = 1)
     {
-        //
+        // Should this increment the slowest store and then backfill the
+        // others to keep the value consistent?
     }
 
     /**
@@ -114,7 +129,8 @@ class StackStore implements Store
      */
     public function decrement($key, $value = 1)
     {
-        //
+        // Should this increment the slowest store and then backfill the
+        // others to keep the value consistent?
     }
 
     /**
@@ -126,7 +142,9 @@ class StackStore implements Store
      */
     public function forever($key, $value)
     {
-        //
+        return $this->repositories
+            ->map->forever($key, $value)
+            ->every(fn ($result) => $result);
     }
 
     /**
@@ -137,7 +155,9 @@ class StackStore implements Store
      */
     public function forget($key)
     {
-        //
+        return $this->repositories
+            ->map->forget($key)
+            ->every(fn ($result) => $result);
     }
 
     /**
@@ -147,7 +167,9 @@ class StackStore implements Store
      */
     public function flush()
     {
-        //
+        return $this->repositories
+            ->map->flush()
+            ->every(fn ($result) => $result);
     }
 
     /**
@@ -157,6 +179,6 @@ class StackStore implements Store
      */
     public function getPrefix()
     {
-        //
+        throw new RuntimeException('The stack driver does not support a prefix.');
     }
 }
