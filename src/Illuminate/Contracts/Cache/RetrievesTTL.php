@@ -2,8 +2,10 @@
 
 namespace Illuminate\Contracts\Cache;
 
+use Illuminate\Cache\Ttl;
+
 interface RetrievesTTL
 {
-    public function ttlInSeconds(string $key): ?int;
+    public function ttl(string $key): ?Ttl;
 }
 

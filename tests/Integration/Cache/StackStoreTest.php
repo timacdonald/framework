@@ -29,8 +29,20 @@ class StackStoreTest extends DatabaseTestCase
     {
         $this->afterApplicationCreated(function () {
             $this->setUpRedis();
-            Redis::flushAll();
-            DB::table('cache')->truncate();
+
+            Cache::store('file')->flush();
+            Cache::store('database')->flush();
+            Cache::store('redis')->flush();
+            Config::set('cache.stores.stack', [
+                'driver' => 'stack',
+            ]);
+            Cache::extend('stack', function () {
+                return new StackStore(new Collection([
+                    Cache::store('array'),
+                    Cache::store('redis'),
+                    Cache::store('database'),
+                ]));
+            });
         });
 
         $this->beforeApplicationDestroyed(function () {
@@ -40,19 +52,8 @@ class StackStoreTest extends DatabaseTestCase
         parent::setUp();
     }
 
-    public function test_get_traverses_cache_to_retrieve_value()
+    public function test_it_traverses_cache_stores_to_retrieve_value_via_get()
     {
-        Config::set('cache.stores.stack', [
-            'driver' => 'stack',
-        ]);
-        Cache::extend('stack', function () {
-            return new StackStore(new Collection([
-                Cache::store('redis'),
-                Cache::store('database'),
-            ]));
-        });
-
-        Cache::store('redis')->forget('name');
         Cache::store('database')->put('name', 'Taylor');
 
         $value = Cache::driver('stack')->get('name');
@@ -60,33 +61,39 @@ class StackStoreTest extends DatabaseTestCase
         $this->assertSame('Taylor', $value);
     }
 
-    public function test_get_updates_higher_stacks()
+    public function test_it_populates_lower_stores_with_retrieved_value()
     {
-        Config::set('cache.stores.stack', [
-            'driver' => 'stack',
-        ]);
-        Cache::extend('stack', function () {
-            return new StackStore(new Collection([
-                Cache::store('redis'),
-                Cache::store('database'),
-            ]));
-        });
-
-        Cache::store('redis')->forget('name');
         Cache::store('database')->put('name', 'Taylor');
 
         $stackValue = Cache::driver('stack')->get('name');
-        $databaseValue = Cache::driver('database')->get('name');
-        $redisValue = Cache::driver('redis')->get('name');
+        $storeValues = [
+            Cache::driver('array')->get('name'),
+            Cache::driver('redis')->get('name'),
+            Cache::driver('database')->get('name'),
+        ];
 
         $this->assertSame('Taylor', $stackValue);
-        $this->assertSame('Taylor', $databaseValue);
-        $this->assertSame('Taylor', $redisValue);
+        $this->assertSame(['Taylor', 'Taylor', 'Taylor'], $storeValues);
     }
 
-    public function test_get_updates_higher_stacks_with_TTL_from_source_cache()
+    public function test_it_uses_ttl_from_source_cache()
     {
         $this->freezeTime();
+        Cache::store('database')->put('name', 'Taylor', 60);
+
+        $stackValue = Cache::driver('stack')->get('name');
+        $storeTtls = [
+            Cache::store('array')->ttl('name')?->inSeconds(),
+            Cache::store('database')->ttl('name')?->inSeconds(),
+            Cache::store("redis")->ttl('name')?->inSeconds(),
+        ];
+
+        $this->assertSame('Taylor', $stackValue);
+        $this->assertSame([60, 60, 60], $storeTtls);
+    }
+
+    public function test_it_can_find_the_value_in_the_first_store()
+    {
         Config::set('cache.stores.stack', [
             'driver' => 'stack',
         ]);
@@ -98,15 +105,15 @@ class StackStoreTest extends DatabaseTestCase
         });
         $prefix = Cache::driver('redis')->getPrefix();
 
-        Cache::store('redis')->forget('name');
-        Cache::store('database')->put('name', 'Taylor', 60);
+        Cache::store('redis')->put('name', 'Taylor', 60);
 
         $value = Cache::driver('stack')->get('name');
         $databaseTTL = DB::table('cache')->value('expiration');
         $redisTTL = Cache::store("redis")->connection()->ttl("laravel_cache_name");
 
         $this->assertSame('Taylor', $value);
-        $this->assertSame(now()->addSeconds(60)->getTimestamp(), $databaseTTL);
+        $this->assertSame(null, $databaseTTL);
         $this->assertSame(60, $redisTTL);
+
     }
 }

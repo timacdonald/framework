@@ -3,10 +3,11 @@
 namespace Illuminate\Cache;
 
 use Illuminate\Contracts\Cache\LockProvider;
+use Illuminate\Contracts\Cache\RetrievesTTL;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\InteractsWithTime;
 
-class ArrayStore extends TaggableStore implements LockProvider
+class ArrayStore extends TaggableStore implements LockProvider, RetrievesTTL
 {
     use InteractsWithTime, RetrievesMultipleKeys;
 
@@ -157,6 +158,21 @@ class ArrayStore extends TaggableStore implements LockProvider
         $this->storage = [];
 
         return true;
+    }
+
+    public function ttl(string $key): ?Ttl
+    {
+        $expiration = $this->storage[$key]['expiresAt'] ?? null;
+
+        $ttl = $expiration
+            ? (int) max(($expiration) - Carbon::now()->getTimestamp(), 0)
+            : null;
+
+        return match ($ttl) {
+            null => null,
+            0 => null,
+            default => Ttl::fromSeconds($ttl),
+        };
     }
 
     /**

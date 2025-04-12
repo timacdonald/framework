@@ -25,7 +25,7 @@ class StackStore implements Store
             ->every(fn ($repository) => $repository->getStore() instanceof RetrievesTTL);
 
         if (! $supported) {
-            throw new RuntimeException('Nested stores in the stack must implement the ['.RetrievesTTL::class.'] interface.');
+            throw new RuntimeException('Nested stack stores must implement ['.RetrievesTTL::class.'].');
         }
     }
     /**
@@ -49,7 +49,12 @@ class StackStore implements Store
 
             /** @var Repository&RetrievesTTL $repository */
 
-            $ttl = $repository->ttlInSeconds($key);
+            $ttl = $repository->ttl($key);
+
+            if ($ttl === null) {
+                $value = null;
+                continue;
+            }
 
             break;
         }
@@ -59,7 +64,11 @@ class StackStore implements Store
         }
 
         foreach ($this->repositories->take($index) as $repository) {
-            $repository->put($key, $value, $ttl);
+            if ($ttl->isForever()) {
+                $repository->forever($key, $value);
+            } else {
+                $repository->put($key, $value, $ttl->inSeconds());
+            }
         }
 
         return $value;

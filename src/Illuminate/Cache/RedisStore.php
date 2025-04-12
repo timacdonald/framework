@@ -11,6 +11,7 @@ use Illuminate\Redis\Connections\PredisClusterConnection;
 use Illuminate\Redis\Connections\PredisConnection;
 use Illuminate\Support\LazyCollection;
 use Illuminate\Support\Str;
+use RuntimeException;
 
 class RedisStore extends TaggableStore implements LockProvider, RetrievesTTL
 {
@@ -297,15 +298,14 @@ class RedisStore extends TaggableStore implements LockProvider, RetrievesTTL
         );
     }
 
-    public function ttlInSeconds(string $key): ?int
+    public function ttl(string $key): ?Ttl
     {
-        $ttl = $this->connection()->ttl($this->prefix.$key);
-
-        if ($ttl >= 0) {
-            return $ttl;
-        }
-
-        return null;
+        return match ($ttl = $this->connection()->ttl($this->prefix.$key)) {
+            -2 => null,
+            -1 => Ttl::forever(),
+            0 => null,
+            default => Ttl::fromSeconds($ttl),
+        };
     }
 
     /**

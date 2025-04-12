@@ -12,7 +12,9 @@ use Illuminate\Database\QueryException;
 use Illuminate\Database\SQLiteConnection;
 use Illuminate\Database\SqlServerConnection;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Date;
 use Illuminate\Support\InteractsWithTime;
 use Illuminate\Support\Str;
 
@@ -424,15 +426,21 @@ class DatabaseStore implements LockProvider, Store, RetrievesTTL
         return true;
     }
 
-    public function ttlInSeconds(string $key): ?int
+    public function ttl(string $key): ?Ttl
     {
-        $expiration =  $this->table()->where('key', $this->prefix.$key)->value('expiration');
+        $expiration = $this->table()
+            ->where('key', $this->prefix.$key)
+            ->value('expiration');
 
-        if ($expiration !== null) {
-            return $expiration - now()->getTimestamp();
-        }
+        $ttl = $expiration
+            ? max($expiration - Carbon::now()->getTimestamp(), 0)
+            : null;
 
-        return null;
+        return match ($ttl) {
+            null => null,
+            0 => null,
+            default => Ttl::fromSeconds($ttl),
+        };
     }
 
     /**
