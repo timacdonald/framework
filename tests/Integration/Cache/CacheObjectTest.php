@@ -3,12 +3,19 @@
 namespace Illuminate\Tests\Integration\Cache;
 
 use DateInterval;
+use DateTimeInterface;
 use Illuminate\Foundation\Testing\Concerns\InteractsWithRedis;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Redis;
 use Orchestra\Testbench\TestCase;
+use RuntimeException;
+use Stringable;
 
+/**
+ * Does using `app()->call($c->hydrate(...), ['value' => $value])` feel clunky
+ * because you _must_ call the cached value `$value`?
+ */
 class CacheObjectTest extends TestCase
 {
     use InteractsWithRedis;
@@ -24,13 +31,28 @@ class CacheObjectTest extends TestCase
 
         // TODO make sure actual `value` method can infer the return
         // type of cacheables.
-        Cache::macro('value', function (Cacheable $cacheable) {
-            $key = $cacheable->cacheKey();
-            $ttl = $cacheable->cacheTtl();
+        Cache::macro('value', function ($cacheable) {
+            $key = method_exists($cacheable, 'key')
+                ? app()->call($cacheable->key(...))
+                : $cacheable->key ?? null;
 
-            return $cacheable->fromCacheValue(
-                $this->remember($key, $ttl, fn () => $cacheable->toCacheValue())
-            );
+            if ($key === null) {
+                throw new RuntimeException('Cache object must have a key defined');
+            }
+
+            $ttl = method_exists($cacheable, 'ttl')
+                ? app()->call($cacheable->ttl(...))
+                : $cacheable->ttl ?? null;
+
+            $callback = app()->wrap($cacheable->resolve(...));
+
+            $value = $this->remember($key, $ttl, $callback);
+
+            if (method_exists($cacheable, 'hydrate')) {
+                $value = app()->call($cacheable->hydrate(...), ['value' => $value]);
+            }
+
+            return $value;
         });
     }
 
@@ -41,29 +63,18 @@ class CacheObjectTest extends TestCase
         $this->tearDownRedis();
     }
 
-    public function test_it_can_retrieve_cachables()
+    public function test_it_can_retrieve_cache_objects()
     {
-        $object = new class implements Cacheable
+        $object = new class
         {
-            use IsCacheable;
+            public $key = 'name';
 
-            public function cacheKey(): string
+            public function resolve()
             {
-                return 'bdfl.name';
-            }
-
-            public function cacheTtl(): int
-            {
-                return 1;
-            }
-
-            public function toCacheValue(): ?string
-            {
-                return null;
+                //
             }
         };
-
-        Cache::put('bdfl.name', 'Taylor');
+        Cache::put('name', 'Taylor');
 
         $result = Cache::value($object);
         $valueInCache = Cache::value($object);
@@ -72,24 +83,99 @@ class CacheObjectTest extends TestCase
         $this->assertSame('Taylor', $valueInCache);
     }
 
+    public function test_it_use_method_injection_for_resolve()
+    {
+        $this->app->instance(MyTestService::class, new MyTestService('Taylor'));
+        $object = new class
+        {
+            public $key = 'name';
+
+            public function resolve(MyTestService $service)
+            {
+                return $service->value;
+            }
+        };
+
+        $result = Cache::value($object);
+        $valueInCache = Cache::value($object);
+
+        $this->assertSame('Taylor', $result);
+        $this->assertSame('Taylor', $valueInCache);
+    }
+
+    public function test_its_key_function_takes_precedence_over_property()
+    {
+        $object = new class
+        {
+            public $key = 'foo';
+
+            public function key()
+            {
+                return 'name';
+            }
+
+            public function resolve()
+            {
+                //
+            }
+        };
+        Cache::put('name', 'Taylor');
+
+        $result = Cache::value($object);
+        $valueInCache = Cache::value($object);
+
+        $this->assertSame('Taylor', $result);
+        $this->assertSame('Taylor', $valueInCache);
+    }
+
+    public function test_it_uses_method_injection_for_key()
+    {
+        $this->app->instance(MyTestService::class, new MyTestService('name'));
+        $object = new class
+        {
+            public function key(MyTestService $service)
+            {
+                return $service->value;
+            }
+
+            public function resolve()
+            {
+                //
+            }
+        };
+        Cache::put('name', 'Taylor');
+
+        $result = Cache::value($object);
+        $valueInCache = Cache::value($object);
+
+        $this->assertSame('Taylor', $result);
+        $this->assertSame('Taylor', $valueInCache);
+    }
+
+    public function test_it_requires_a_key()
+    {
+        $object = new class
+        {
+            public function resolve()
+            {
+                //
+            }
+        };
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('Cache object must have a key defined');
+
+        Cache::value($object);
+    }
+
     public function test_it_puts_value_into_cache_when_missing()
     {
         $this->freezeTime();
-        $object = new class implements Cacheable
+        $object = new class
         {
-            use IsCacheable;
+            public $key = 'time';
 
-            public function cacheKey(): string
-            {
-                return 'time';
-            }
-
-            public function cacheTtl(): int
-            {
-                return 1;
-            }
-
-            public function toCacheValue(): mixed
+            public function resolve()
             {
                 return now()->getTimestamp();
             }
@@ -98,6 +184,9 @@ class CacheObjectTest extends TestCase
         $result = Cache::value($object);
         $valueInCache = Cache::get('time');
 
+        // Note this comes out as an int, while the others come out as a
+        // string. This is expected from an implementation point of view.
+        // Might be weird from a consumer perspective.
         $this->assertSame(now()->getTimestamp(), $result);
         $this->assertSame((string) now()->getTimestamp(), $valueInCache);
 
@@ -110,46 +199,85 @@ class CacheObjectTest extends TestCase
         $this->assertSame((string) now()->subSeconds(10)->getTimestamp(), $valueInCache);
     }
 
-    public function test_it_can_intercept_hydration_from_cache()
+    public function test_it_can_hydrate_when_value_is_put_into_cache()
     {
-        $object = new class implements Cacheable
+        $object = new class
         {
-            use IsCacheable;
+            public $key = 'name';
 
-            public function cacheKey(): string
-            {
-                return 'bdfl.name';
-            }
-
-            public function cacheTtl(): int
-            {
-                return 1;
-            }
-
-            public function toCacheValue(): mixed
+            public function resolve()
             {
                 return 'Taylor';
             }
 
-            public function fromCacheValue(mixed $value): mixed
+            public function hydrate($value)
             {
                 return "{$value} Otwell";
             }
         };
 
         $result = Cache::value($object);
-        $valueInCache = Cache::get('bdfl.name');
+        $valueInCache = Cache::get('name');
 
         $this->assertSame('Taylor Otwell', $result);
         $this->assertSame('Taylor', $valueInCache);
     }
 
-    public function test_it_can_use_constructor()
+    public function test_it_can_hydrate_when_value_is_already_in_the_cache()
     {
-        $userCacheableFactory = fn (int $id, array $attributes) => new class($id, $attributes) implements Cacheable
+        $object = new class
         {
-            use IsCacheable;
+            public $key = 'name';
 
+            public function resolve()
+            {
+                return 'Taylor';
+            }
+
+            public function hydrate($value)
+            {
+                return "{$value} Otwell";
+            }
+        };
+
+        Cache::put('name', 'Abigail');
+
+        $result = Cache::value($object);
+        $valueInCache = Cache::get('name');
+
+        $this->assertSame('Abigail Otwell', $result);
+        $this->assertSame('Abigail', $valueInCache);
+    }
+
+    public function test_it_uses_method_injection_for_hydrate()
+    {
+        $this->app->instance(MyTestService::class, new MyTestService('Otwell'));
+        $object = new class
+        {
+            public $key = 'name';
+
+            public function resolve()
+            {
+                return 'Taylor';
+            }
+
+            public function hydrate($value, MyTestService $service)
+            {
+                return "{$value} {$service->value}";
+            }
+        };
+
+        $result = Cache::value($object);
+        $valueInCache = Cache::get('name');
+
+        $this->assertSame('Taylor Otwell', $result);
+        $this->assertSame('Taylor', $valueInCache);
+    }
+
+    public function test_it_owns_the_objects_constructor()
+    {
+        $userCacheableFactory = fn (int $id, array $attributes) => new class($id, $attributes)
+        {
             public function __construct(
                 private int $id,
                 private array $attributes,
@@ -157,17 +285,12 @@ class CacheObjectTest extends TestCase
                 sort($this->attributes);
             }
 
-            public function cacheKey(): string
+            public function key()
             {
                 return "user:{$this->id}:".implode(',', $this->attributes);
             }
 
-            public function cacheTtl(): int
-            {
-                return 1;
-            }
-
-            public function toCacheValue()
+            public function resolve()
             {
                 return array_intersect_key([
                     'name' => 'Taylor',
@@ -175,69 +298,119 @@ class CacheObjectTest extends TestCase
                     'framework' => 'Laravel',
                 ], array_flip($this->attributes));
             }
-
-            public function fromCacheValue(array $value)
-            {
-                return (object) $value;
-            }
         };
         $userOneWithoutFrameworkCacheable = $userCacheableFactory(1, ['name', 'email']);
         $userOneWithFrameworkCacheable = $userCacheableFactory(1, ['framework']);
 
-        $userOneWithoutFramework = Cache::value($userOneWithoutFrameworkCacheable);
-        $userOneWithFramework = Cache::value($userOneWithFrameworkCacheable);
-        $userOneWithoutFrameworkInCache = Cache::get('user:1:email,name');
-        $userOneWithFrameworkInCache = Cache::get('user:1:framework');
+        $userOneWithoutFrameworkResult = Cache::value($userOneWithoutFrameworkCacheable);
+        $userOneWithFrameworkResult = Cache::value($userOneWithFrameworkCacheable);
+        $userOneWithoutFrameworkValueInCache = Cache::get('user:1:email,name');
+        $userOneWithFrameworkValueInCache = Cache::get('user:1:framework');
 
-        $this->assertEquals($userOneWithoutFramework, (object) [
+        $this->assertSame($userOneWithoutFrameworkResult, [
             'name' => 'Taylor',
             'email' => 'taylor@laravel.com',
         ]);
-        $this->assertEquals($userOneWithFramework, (object) [
+        $this->assertSame($userOneWithFrameworkResult, [
             'framework' => 'Laravel',
         ]);
-        $this->assertEquals($userOneWithoutFrameworkInCache, [
+        $this->assertSame($userOneWithoutFrameworkValueInCache, [
             'name' => 'Taylor',
             'email' => 'taylor@laravel.com',
         ]);
-        $this->assertEquals($userOneWithFrameworkInCache, [
+        $this->assertSame($userOneWithFrameworkValueInCache, [
             'framework' => 'Laravel',
         ]);
     }
 
     public function test_it_can_set_a_ttl()
     {
-        $object = new class implements Cacheable
+        $object = new class
         {
-            use IsCacheable;
+            public $ttl = 1;
+            public $key = 'name';
 
-            public function toCacheValue(): mixed
+            public function resolve(): mixed
+            {
+                return 'Taylor';
+            }
+        };
+
+        $result = Cache::value($object);
+        $valueInCache = Cache::get('name');
+
+        $this->assertSame('Taylor', $result);
+        $this->assertSame('Taylor', $valueInCache);
+
+        sleep(1);
+
+        $valueInCache = Cache::get('name');
+
+        $this->assertNull($valueInCache);
+    }
+
+    public function test_ttl_function_takes_precedence_over_property()
+    {
+        $object = new class
+        {
+            public $key = 'name';
+            public $ttl = 2;
+
+            public function resolve(): mixed
             {
                 return 'Taylor';
             }
 
-            public function cacheKey(): string
-            {
-                return 'bdfl.name';
-            }
-
-            public function cacheTtl(): DateTimeInterface|DateInterval|int
+            public function ttl()
             {
                 return 1;
             }
         };
 
         $result = Cache::value($object);
-        $valueInCache = Cache::get('bdfl.name');
+        $valueInCache = Cache::get('name');
 
         $this->assertSame('Taylor', $result);
         $this->assertSame('Taylor', $valueInCache);
 
         sleep(1);
-        $valueInCache = Cache::get('bdfl.name');
+
+        $valueInCache = Cache::get('name');
 
         $this->assertNull($valueInCache);
     }
+
+    public function test_it_uses_method_injection_for_ttl()
+    {
+        $this->app->instance(MyTestService::class, new MyTestService(1));
+        $object = new class
+        {
+            public $key = 'name';
+
+            public function resolve(): mixed
+            {
+                return 'Taylor';
+            }
+
+            public function ttl(MyTestService $service)
+            {
+                return $service->value;
+            }
+        };
+
+        $result = Cache::value($object);
+        $valueInCache = Cache::get('name');
+
+        $this->assertSame('Taylor', $result);
+        $this->assertSame('Taylor', $valueInCache);
+
+        sleep(1);
+
+        $valueInCache = Cache::get('name');
+
+        $this->assertNull($valueInCache);
+    }
+
 
     public function test_it_can_invalidate_cache()
     {
@@ -250,6 +423,11 @@ class CacheObjectTest extends TestCase
     }
 
     public function test_it_can_use_memo()
+    {
+        $this->markTestIncomplete();
+    }
+
+    public function test_it_can_also_memoize_hydrated_values()
     {
         $this->markTestIncomplete();
     }
@@ -275,21 +453,11 @@ class CacheObjectTest extends TestCase
     }
 }
 
-interface Cacheable
+class MyTestService
 {
-    // cacheKey(...): string
-    // toCacheValue(...): mixed
-    // fromCacheValue(mixed $value, ...): mixed
-}
-
-// TODO this trait or just check method_exists($cacheable, 'fromCacheValue')
-trait IsCacheable
-{
-    // TODO
-    // protected ?string $cacheKey = null;
-
-    public function fromCacheValue(mixed $value): mixed
-    {
-        return $value;
+    public function __construct(
+        public $value,
+    ) {
+        //
     }
 }
