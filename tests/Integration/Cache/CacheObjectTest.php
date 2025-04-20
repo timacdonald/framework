@@ -32,8 +32,6 @@ use Stringable;
  * because you _must_ call the cached value `$value`?
  * How can I keep my most active users cached?
  * What does it look like in the schedule?
- * What if I want to retrieve mutliple values at once? Cache::values([...])?
- * PutMany / GetMany / WarmMany
  */
 class CacheObjectTest extends TestCase
 {
@@ -1050,18 +1048,17 @@ class CacheObjectTest extends TestCase
         $this->assertTrue($returnedWarmValue);
     }
 
+    public function test_warming_flushes_memoized_value()
+    {
+        $this->markTestIncomplete();
+    }
+
     public function test_it_can_be_nicely_tied_into_eloquent_events_to_stay_up_to_date()
     {
-        $this->markTestIncomplete();
-    }
-
-    public function test_it_can_use_memo()
-    {
-        $this->markTestIncomplete();
-    }
-
-    public function test_it_can_also_memoize_hydrated_values()
-    {
+        // static function updated($model)
+        // {
+        //      Cache::warm(new CachedUser($model->id), $model);
+        // }
         $this->markTestIncomplete();
     }
 
