@@ -5,9 +5,12 @@ namespace Illuminate\Tests\Integration\Cache;
 use DateInterval;
 use DateTimeInterface;
 use Illuminate\Cache\Events\CacheHit;
+use Illuminate\Cache\Events\KeyWritten;
 use Illuminate\Cache\Events\RetrievingManyKeys;
 use Illuminate\Cache\Events\WritingKey;
 use Illuminate\Cache\Events\WritingManyKeys;
+use Illuminate\Contracts\Cache\Repository;
+use Illuminate\Contracts\Cache\Store;
 use Illuminate\Foundation\Testing\Concerns\InteractsWithRedis;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
@@ -39,13 +42,15 @@ class CacheObjectTest extends TestCase
         Config::set('cache.default', 'redis');
         Redis::flushAll();
 
-        $resolveKey = fn ($cacheable) => method_exists($cacheable, 'key')
-            ? app()->call($cacheable->key(...))
-            : $cacheable->key ?? null;
+        $resolveMethodOrProperty = fn ($cacheable, $method) => method_exists($cacheable, $method)
+            ? app()->call($cacheable->{$method}(...))
+            : $cacheable->{$method} ?? null;
 
-        $resolveTtl = fn ($cacheable) => method_exists($cacheable, 'ttl')
-            ? app()->call($cacheable->ttl(...))
-            : $cacheable->ttl ?? null;
+        $resolveKey = fn ($cacheable) => $resolveMethodOrProperty($cacheable, 'key');
+
+        $resolveTtl = fn ($cacheable) => $resolveMethodOrProperty($cacheable, 'ttl');
+
+        $resolveStore = fn ($cacheable) => $resolveMethodOrProperty($cacheable, 'store');
 
         $hydrate = fn ($cacheable, $value) => method_exists($cacheable, 'hydrate')
             ? app()->call($cacheable->hydrate(...), ['value' => $value])
@@ -53,10 +58,13 @@ class CacheObjectTest extends TestCase
 
         Cache::macro('value', fn ($cacheable) => Cache::values([$cacheable])[0]);
 
-        Cache::macro('values', function ($cacheables) use ($resolveKey, $resolveTtl, $hydrate) {
+        Cache::macro('values', function ($cacheables) use ($resolveKey, $resolveTtl, $resolveStore, $hydrate) {
             $order = [];
+            $cacheables = collect($cacheables);
 
-            $mapped = collect($cacheables)
+            $cacheables->whereInstanceOf(RepositoryAware::class)->each(fn ($cacheable) => $cacheable->setRepository(Cache::store()));
+
+            $mapped = $cacheables
                 ->mapWithKeys(function ($cacheable) use ($resolveKey, &$order) {
                     $key = (string) $resolveKey($cacheable);
 
@@ -86,13 +94,12 @@ class CacheObjectTest extends TestCase
                     $ttl = $ttl === '' ? null : $ttl;
 
                     $values = $ttlGroup
-                        ->map(fn ($cacheable) => app()->call($cacheable->resolve(...)))
-                        ->all();
+                        ->map(fn ($cacheable) => app()->call($cacheable->resolve(...)));
 
-                    if (count($values) === 1) {
-                        Cache::put(array_keys($values)[0], array_values($values)[0], $ttl);
+                    if ($values->containsOneItem()) {
+                        Cache::put($values->keys()->first(), $values->first(), $ttl);
                     } else {
-                        Cache::putMany($values, $ttl);
+                        Cache::putMany($values->all(), $ttl);
                     }
 
                     return $values;
@@ -326,7 +333,7 @@ class CacheObjectTest extends TestCase
                 return $this->value;
             }
         };
-        Event::fake([RetrievingManyKeys::class, WritingManyKeys::class]);
+        Event::fake([RetrievingManyKeys::class, WritingManyKeys::class, KeyWritten::class]);
 
         $result = Cache::values([
             $factory('name.0', 'Taylor', 5),
@@ -334,11 +341,13 @@ class CacheObjectTest extends TestCase
             $factory('name.2', 'Jess', 10),
             $factory('name.3', 'Ryuta', 10),
             $factory('name.4', 'Sabrina', 5),
+            $factory('name.5', 'Jeremy', null),
+            $factory('name.6', 'Phillip', null),
         ]);
 
         Event::assertDispatched(RetrievingManyKeys::class, 1);
         Event::assertDispatched(fn (RetrievingManyKeys $event) => $event->keys === [
-            'name.0', 'name.1', 'name.2', 'name.3', 'name.4',
+            'name.0', 'name.1', 'name.2', 'name.3', 'name.4', 'name.5', 'name.6',
         ]);
         Event::assertDispatched(WritingManyKeys::class, 2);
         Event::assertDispatched(fn (WritingManyKeys $event) => $event->keys === [
@@ -347,6 +356,10 @@ class CacheObjectTest extends TestCase
         Event::assertDispatched(fn (WritingManyKeys $event) => $event->keys === [
             'name.2', 'name.3',
         ] && $event->seconds === 10);
+        // Writing many keys is not possible via a single call when ttl is
+        // `null`.  Need to check for multiple writes instead...
+        Event::assertDispatched(fn (KeyWritten $event) => $event->key === 'name.5' && $event->seconds === null);
+        Event::assertDispatched(fn (KeyWritten $event) => $event->key === 'name.6' && $event->seconds === null);
     }
 
     public function test_it_puts_missing_cache_item_into_cache_via_one_put_call_when_no_shared_ttl_exists()
@@ -629,7 +642,7 @@ class CacheObjectTest extends TestCase
             public $ttl = 99;
             public $key = 'name';
 
-            public function resolve(): mixed
+            public function resolve()
             {
                 return 'Taylor';
             }
@@ -648,7 +661,7 @@ class CacheObjectTest extends TestCase
             public $key = 'name';
             public $ttl = 1;
 
-            public function resolve(): mixed
+            public function resolve()
             {
                 return 'Taylor';
             }
@@ -672,7 +685,7 @@ class CacheObjectTest extends TestCase
         {
             public $key = 'name';
 
-            public function resolve(): mixed
+            public function resolve()
             {
                 return 'Taylor';
             }
@@ -687,6 +700,45 @@ class CacheObjectTest extends TestCase
         $ttl = Cache::store()->connection()->ttl(Cache::store()->getPrefix().'name');
 
         $this->assertEqualsWithDelta(99, $ttl, 1);
+    }
+
+    public function test_it_can_have_access_to_the_cache_repository()
+    {
+        $object = new class implements RepositoryAware
+        {
+            private $repository;
+
+            public function setRepository(Repository $repository): void
+            {
+                $this->repository = $repository;
+            }
+
+            public function key()
+            {
+                return $this->repository->get('key');
+            }
+
+            public function resolve()
+            {
+                return $this->repository->get('value');
+            }
+
+            public function ttl()
+            {
+                return $this->repository->get('ttl');
+            }
+        };
+        Cache::putMany([
+            'key' => 'name',
+            'value' => 'Taylor',
+            'ttl' => 10,
+        ]);
+
+        $result = Cache::value($object);
+        $ttl = Cache::store()->connection()->ttl(Cache::store()->getPrefix().'name');
+
+        $this->assertEqualsWithDelta(10, $ttl, 1);
+        $this->assertSame($result, 'Taylor');
     }
 
     public function test_it_can_warm_the_cache_with_in_memory_value()
@@ -783,10 +835,6 @@ class CacheObjectTest extends TestCase
         $this->markTestIncomplete('Dunno about this');
     }
 
-    public function test_it_has_access_to_the_cache()
-    {
-        $this->markTestIncomplete();
-    }
 }
 
 class MyTestService
@@ -796,4 +844,9 @@ class MyTestService
     ) {
         //
     }
+}
+
+interface RepositoryAware
+{
+    public function setRepository(Repository $repository): void;
 }
