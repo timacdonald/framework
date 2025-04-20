@@ -9,6 +9,7 @@ use Illuminate\Cache\Events\KeyWritten;
 use Illuminate\Cache\Events\RetrievingManyKeys;
 use Illuminate\Cache\Events\WritingKey;
 use Illuminate\Cache\Events\WritingManyKeys;
+use Illuminate\Cache\RedisStore;
 use Illuminate\Contracts\Cache\Repository;
 use Illuminate\Contracts\Cache\Store;
 use Illuminate\Foundation\Testing\Concerns\InteractsWithRedis;
@@ -19,6 +20,7 @@ use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Redis;
 use Orchestra\Testbench\TestCase;
 use RuntimeException;
+use SplObjectStorage;
 use Stringable;
 
 /**
@@ -62,56 +64,66 @@ class CacheObjectTest extends TestCase
             $order = [];
             $cacheables = collect($cacheables);
 
-            $cacheables->whereInstanceOf(RepositoryAware::class)->each(fn ($cacheable) => $cacheable->setRepository(Cache::store()));
+            $storeMappedResults = $cacheables
+                ->groupBy(function ($cacheable) use ($resolveStore) {
+                    $store = $resolveStore($cacheable);
 
-            $mapped = $cacheables
-                ->mapWithKeys(function ($cacheable) use ($resolveKey, &$order) {
-                    $key = (string) $resolveKey($cacheable);
-
-                    if ($key === '') {
-                        throw new RuntimeException('Cache object must have a key defined');
+                    if ($cacheable instanceof RepositoryAware) {
+                        $cacheable->setRepository(Cache::store($store));
                     }
 
-                    $order[] = $key;
+                    return $store;
+                })
+                ->map(function ($cacheables, $store) use ($resolveKey, $resolveTtl, $hydrate, &$order) {
+                    $keyMap = $cacheables
+                        ->mapWithKeys(function ($cacheable) use ($resolveKey, &$order, $store) {
+                            $key = (string) $resolveKey($cacheable);
 
-                    return [$key => $cacheable];
+                            if ($key === '') {
+                                throw new RuntimeException('Cache object must have a key defined');
+                            }
+
+                            $order[] = [$store, $key];
+
+                            return [$key => $cacheable];
+                        });
+
+                    $existing = Cache::store($store)->many($keyMap->keys()->all());
+
+                    $found = collect($existing)
+                        ->reject(fn ($value) => $value === null)
+                        ->keys();
+
+                    $missing = collect($existing)
+                        ->forget($found)
+                        ->keys();
+
+                    $resolved = $keyMap
+                        ->except($found)
+                        ->groupBy(fn ($cacheable, $key) => $resolveTtl($cacheable), preserveKeys: true)
+                        ->flatMap(function ($ttlGroup, $ttl) use ($store) {
+                            $ttl = $ttl === '' ? null : $ttl;
+
+                            $values = $ttlGroup
+                                ->map(fn ($cacheable) => app()->call($cacheable->resolve(...)));
+
+                            if ($values->containsOneItem()) {
+                                Cache::store($store)->put($values->keys()->first(), $values->first(), $ttl);
+                            } else {
+                                Cache::store($store)->putMany($values->all(), $ttl);
+                            }
+
+                            return $values;
+                        });
+
+                    return collect([...$existing, ...$resolved])
+                        ->map(fn ($value, $key) => $hydrate($keyMap[$key], $value));
                 });
-
-            $existing = Cache::many($mapped->keys()->all());
-
-            $found = collect($existing)
-                ->reject(fn ($value) => $value === null)
-                ->keys();
-
-            $missing = collect($existing)
-                ->forget($found)
-                ->keys();
-
-            $resolved = $mapped
-                ->except($found)
-                ->groupBy(fn ($cacheable, $key) => $resolveTtl($cacheable), preserveKeys: true)
-                ->flatMap(function ($ttlGroup, $ttl) {
-                    $ttl = $ttl === '' ? null : $ttl;
-
-                    $values = $ttlGroup
-                        ->map(fn ($cacheable) => app()->call($cacheable->resolve(...)));
-
-                    if ($values->containsOneItem()) {
-                        Cache::put($values->keys()->first(), $values->first(), $ttl);
-                    } else {
-                        Cache::putMany($values->all(), $ttl);
-                    }
-
-                    return $values;
-                });
-
-            $all = collect([...$existing, ...$resolved])
-                ->map(fn ($value, $key) => $hydrate($mapped[$key], $value));
 
             $results = [];
 
-            foreach ($order as $key) {
-                $results[] = $all[$key];
+            foreach ($order as [$store, $key]) {
+                $results[] = $storeMappedResults[$store][$key];
             }
 
             return $results;
@@ -739,6 +751,39 @@ class CacheObjectTest extends TestCase
 
         $this->assertEqualsWithDelta(10, $ttl, 1);
         $this->assertSame($result, 'Taylor');
+    }
+
+    public function test_it_can_specify_the_cache_store()
+    {
+        $object = new class implements RepositoryAware
+        {
+            public $repository;
+            public $key = 'name';
+
+            public function store()
+            {
+                return 'array';
+            }
+
+            public function setRepository(Repository $repository): void
+            {
+                $this->repository = $repository;
+            }
+
+            public function resolve()
+            {
+                return 'Taylor';
+            }
+        };
+
+        $result = Cache::value($object);
+        $valueInDefaultStore = Cache::get('name');
+        $valueInArrayStore = Cache::store('array')->get('name');
+
+        $this->assertSame($result, 'Taylor');
+        $this->assertSame($valueInDefaultStore, null);
+        $this->assertSame($valueInArrayStore, 'Taylor');
+        $this->assertSame($object->repository, Cache::store('array'));
     }
 
     public function test_it_can_warm_the_cache_with_in_memory_value()
