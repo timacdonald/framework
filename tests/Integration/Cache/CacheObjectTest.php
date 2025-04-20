@@ -2,6 +2,7 @@
 
 namespace Illuminate\Tests\Integration\Cache;
 
+use Attribute;
 use DateInterval;
 use DateTimeInterface;
 use Illuminate\Cache\Events\CacheHit;
@@ -19,6 +20,9 @@ use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Redis;
 use Orchestra\Testbench\TestCase;
+use ReflectionClass;
+use ReflectionFunction;
+use ReflectionMethod;
 use RuntimeException;
 use SplObjectStorage;
 use Stringable;
@@ -58,9 +62,10 @@ class CacheObjectTest extends TestCase
             ? app()->call($cacheable->hydrate(...), ['value' => $value])
             : $value;
 
+        $memo = collect([]);
         Cache::macro('value', fn ($cacheable) => Cache::values([$cacheable])[0]);
 
-        Cache::macro('values', function ($cacheables) use ($resolveKey, $resolveTtl, $resolveStore, $hydrate) {
+        Cache::macro('values', function ($cacheables) use ($resolveKey, $resolveTtl, $resolveStore, $hydrate, $memo) {
             $order = [];
             $cacheables = collect($cacheables);
 
@@ -68,13 +73,17 @@ class CacheObjectTest extends TestCase
                 ->groupBy(function ($cacheable) use ($resolveStore) {
                     $store = $resolveStore($cacheable);
 
+                    if ($store  === null) {
+                        $store = Cache::getDefaultDriver();
+                    }
+
                     if ($cacheable instanceof RepositoryAware) {
                         $cacheable->setRepository(Cache::store($store));
                     }
 
                     return $store;
                 })
-                ->map(function ($cacheables, $store) use ($resolveKey, $resolveTtl, $hydrate, &$order) {
+                ->map(function ($cacheables, $store) use ($resolveKey, $resolveTtl, $hydrate, &$order, $memo) {
                     $keyMap = $cacheables
                         ->mapWithKeys(function ($cacheable) use ($resolveKey, &$order, $store) {
                             $key = (string) $resolveKey($cacheable);
@@ -88,24 +97,22 @@ class CacheObjectTest extends TestCase
                             return [$key => $cacheable];
                         });
 
-                    $existing = Cache::store($store)->many($keyMap->keys()->all());
+                    $memoized = collect($memo[$store] ?? [])
+                        ->only($keyMap->keys());
 
-                    $found = collect($existing)
-                        ->reject(fn ($value) => $value === null)
-                        ->keys();
-
-                    $missing = collect($existing)
-                        ->forget($found)
-                        ->keys();
+                    $cached = collect(Cache::store($store)
+                        ->many($keyMap->except($memoized->keys())->keys()->all()))
+                        ->reject(fn ($value) => $value === null);
 
                     $resolved = $keyMap
-                        ->except($found)
+                        ->except([...$memoized->keys(), ...$cached->keys()])
                         ->groupBy(fn ($cacheable, $key) => $resolveTtl($cacheable), preserveKeys: true)
-                        ->flatMap(function ($ttlGroup, $ttl) use ($store) {
+                        ->flatMap(function ($ttlGroup, $ttl) use ($store, $memo) {
                             $ttl = $ttl === '' ? null : $ttl;
 
                             $values = $ttlGroup
-                                ->map(fn ($cacheable) => app()->call($cacheable->resolve(...)));
+                                ->map(fn ($cacheable, $key) => app()->call($cacheable->resolve(...)));
+
 
                             if ($values->containsOneItem()) {
                                 Cache::store($store)->put($values->keys()->first(), $values->first(), $ttl);
@@ -116,8 +123,20 @@ class CacheObjectTest extends TestCase
                             return $values;
                         });
 
-                    return collect([...$existing, ...$resolved])
-                        ->map(fn ($value, $key) => $hydrate($keyMap[$key], $value));
+                    return collect([...$cached, ...$resolved])
+                        ->map(function ($value, $key) use ($hydrate, $store, $keyMap, $memo) {
+                            $value = $hydrate($keyMap[$key], $value);
+
+                            if ((new ReflectionClass($keyMap[$key]))->getAttributes(Memoize::class) !== []){
+                                $memo[$store] ??= [];
+                                $memo[$store] = [
+                                    ...$memo[$store],
+                                    $key => $value,
+                                ];
+                            }
+
+                            return $value;
+                        })->merge($memoized);
                 });
 
             $results = [];
@@ -899,6 +918,36 @@ class CacheObjectTest extends TestCase
         Event::assertDispatched(fn (KeyWritten $event) => $event->key === 'end' && $event->seconds === null && $event->storeName === 'redis');
     }
 
+    public function test_it_can_memoize_resolved_value()
+    {
+        // This creates a _shared_ memo across instances.
+        $this->freezeTime();
+        $object = new MemoizedObject(
+            key: 'time',
+            resolve: fn () => 'Resolve: '.now()->getTimestamp(),
+            hydrate: fn ($value) => $value.' Hydrate: '.now()->getTimestamp(),
+        );
+
+        $result = Cache::value($object);
+        $valueInCache = Cache::get('time');
+
+        $this->assertSame('Resolve: '.now()->getTimestamp().' Hydrate: '.now()->getTimestamp(), $result);
+        $this->assertSame('Resolve: '.now()->getTimestamp(), $valueInCache);
+
+        $this->travelTo(now()->addMinute());
+
+        Cache::forget('time');
+        $valueInCache = Cache::get('time');
+
+        $this->assertNull($valueInCache);
+
+        $result = Cache::value($object);
+        $valueInCache = Cache::get('time');
+
+        $this->assertSame('Resolve: '.now()->subMinute()->getTimestamp().' Hydrate: '.now()->subMinute()->getTimestamp(), $result);
+        $this->assertNull($valueInCache);
+    }
+
     public function test_it_can_warm_the_cache_with_in_memory_value()
     {
         $object = new class
@@ -983,11 +1032,6 @@ class CacheObjectTest extends TestCase
         $this->markTestIncomplete();
     }
 
-    public function test_it_has_access_to_the_cache_driver_on_the_object()
-    {
-        $this->markTestIncomplete();
-    }
-
     public function test_it_can_be_used_with_locks_and_other_cache_features()
     {
         $this->markTestIncomplete('Dunno about this');
@@ -1007,4 +1051,32 @@ class MyTestService
 interface RepositoryAware
 {
     public function setRepository(Repository $repository): void;
+}
+
+#[Attribute]
+class Memoize
+{
+    //
+}
+
+#[Memoize]
+class MemoizedObject
+{
+    public function __construct(
+        public $key,
+        public $resolve,
+        public $hydrate,
+    ) {
+        //
+    }
+
+    public function resolve()
+    {
+        return call_user_func($this->resolve);
+    }
+
+    public function hydrate($value)
+    {
+        return call_user_func($this->hydrate, $value);
+    }
 }
