@@ -786,6 +786,119 @@ class CacheObjectTest extends TestCase
         $this->assertSame($object->repository, Cache::store('array'));
     }
 
+    public function test_it_can_retrieve_values_across_multiple_stores()
+    {
+        $factory = fn ($key, $store) => new class($key, $store)
+        {
+            public function __construct(
+                public $key,
+                public $store,
+            )
+            {
+                //
+            }
+
+            public function resolve()
+            {
+                //
+            }
+        };
+        Cache::store('array')->put('name', 'Taylor');
+        Cache::store('redis')->put('name', 'Tim');
+
+        $result = Cache::values([
+            $factory('name', 'array'),
+            $factory('name', 'redis'),
+        ]);
+
+        $this->assertSame($result, ['Taylor', 'Tim']);
+    }
+
+    public function test_it_groups_retrieval_of_values_across_multiple_stores_into_single_call_per_store()
+    {
+        $factory = fn ($store, $key) => new class($store, $key)
+        {
+            public function __construct(
+                public $store,
+                public $key,
+            )
+            {
+                //
+            }
+
+            public function resolve()
+            {
+                //
+            }
+        };
+        Cache::store('array')->putMany(['name.0' => 'Taylor', 'name.1' => 'Otwell']);
+        Cache::store('redis')->putMany(['name.0' => 'Tim', 'name.1' => 'MacDonald']);
+
+        $result = Cache::values([
+            $factory('array', 'name.0'),
+            $factory('array', 'name.1'),
+            $factory('redis', 'name.0'),
+            $factory('redis', 'name.1'),
+        ]);
+
+        $this->assertSame($result, ['Taylor', 'Otwell', 'Tim', 'MacDonald']);
+    }
+
+    public function test_it_groups_cache_writes_across_multiple_stores_into_single_call_per_store_per_ttl()
+    {
+        $factory = fn ($store, $key, $value, $ttl) => new class($store, $key, $value, $ttl)
+        {
+            public function __construct(
+                public $store,
+                public $key,
+                public $value,
+                public $ttl,
+            )
+            {
+                //
+            }
+
+            public function resolve()
+            {
+                return $this->value;
+            }
+        };
+
+        Event::fake([RetrievingManyKeys::class, WritingManyKeys::class, KeyWritten::class]);
+
+        $result = Cache::values([
+            $factory('array', 'framework', 'Laravel', 10),
+            $factory('array', 'language', 'PHP', 10),
+            $factory('array', 'end', 'back', null),
+            $factory('redis', 'framework', 'Vue', 9),
+            $factory('redis', 'language', 'JavaScript', 9),
+            $factory('redis', 'end', 'front', null),
+        ]);
+
+        $this->assertSame($result, [
+            'Laravel', 'PHP', 'back',
+            'Vue', 'JavaScript', 'front',
+        ]);
+        Event::assertDispatched(RetrievingManyKeys::class, 2);
+        Event::assertDispatched(fn (RetrievingManyKeys $event) => $event->keys === [
+            'framework', 'language', 'end',
+        ] && $event->storeName === 'array');
+        Event::assertDispatched(fn (RetrievingManyKeys $event) => $event->keys === [
+            'framework', 'language', 'end',
+        ] && $event->storeName === 'redis');
+        Event::assertDispatched(WritingManyKeys::class, 2);
+        Event::assertDispatched(fn (WritingManyKeys $event) => $event->keys === [
+            'framework', 'language',
+        ] && $event->seconds === 10 && $event->storeName === 'array');
+        Event::assertDispatched(fn (WritingManyKeys $event) => $event->keys === [
+            'framework', 'language',
+        ] && $event->seconds === 9 && $event->storeName === 'redis');
+        // Writing many keys is not possible via a single call when ttl is
+        // `null`.  Need to check for multiple writes instead...
+        Event::assertDispatched(fn (KeyWritten $event) => $event->key === 'end' && $event->seconds === null && $event->storeName === 'array');
+        Event::assertDispatched(fn (KeyWritten $event) => $event->key === 'end' && $event->seconds === null && $event->storeName === 'redis');
+    }
+
     public function test_it_can_warm_the_cache_with_in_memory_value()
     {
         $object = new class
