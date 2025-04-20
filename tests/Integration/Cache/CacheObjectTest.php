@@ -6,6 +6,7 @@ use DateInterval;
 use DateTimeInterface;
 use Illuminate\Cache\Events\CacheHit;
 use Illuminate\Cache\Events\RetrievingManyKeys;
+use Illuminate\Cache\Events\WritingKey;
 use Illuminate\Cache\Events\WritingManyKeys;
 use Illuminate\Foundation\Testing\Concerns\InteractsWithRedis;
 use Illuminate\Support\Collection;
@@ -348,6 +349,39 @@ class CacheObjectTest extends TestCase
         ] && $event->seconds === 10);
     }
 
+    public function test_it_puts_missing_cache_item_into_cache_via_one_put_call_when_no_shared_ttl_exists()
+    {
+        $factory = fn ($key, $value, $ttl) => new class($key, $value, $ttl)
+        {
+            public function __construct(
+                public $key,
+                public $value,
+                public $ttl,
+            ) {
+                //
+            }
+
+            public function resolve()
+            {
+                return $this->value;
+            }
+        };
+        Event::fake([RetrievingManyKeys::class, WritingManyKeys::class, WritingKey::class]);
+
+        $result = Cache::values([
+            $factory('name.0', 'Taylor', 5),
+            $factory('name.1', 'Tim', 10),
+        ]);
+
+        Event::assertDispatched(RetrievingManyKeys::class, 1);
+        Event::assertDispatched(fn (RetrievingManyKeys $event) => $event->keys === [
+            'name.0', 'name.1',
+        ]);
+        Event::assertDispatched(WritingManyKeys::class, 0);
+        Event::assertDispatched(fn (WritingKey $event) => $event->key === 'name.0' && $event->seconds === 5);
+        Event::assertDispatched(fn (WritingKey $event) => $event->key === 'name.1' && $event->seconds === 10);
+    }
+
     public function test_it_use_method_injection_for_resolve()
     {
         $this->app->instance(MyTestService::class, new MyTestService('Taylor'));
@@ -592,7 +626,7 @@ class CacheObjectTest extends TestCase
     {
         $object = new class
         {
-            public $ttl = 1;
+            public $ttl = 99;
             public $key = 'name';
 
             public function resolve(): mixed
@@ -601,17 +635,10 @@ class CacheObjectTest extends TestCase
             }
         };
 
-        $result = Cache::value($object);
-        $valueInCache = Cache::get('name');
+        Cache::value($object);
+        $ttl = Cache::store()->connection()->ttl(Cache::store()->getPrefix().'name');
 
-        $this->assertSame('Taylor', $result);
-        $this->assertSame('Taylor', $valueInCache);
-
-        sleep(1);
-
-        $valueInCache = Cache::get('name');
-
-        $this->assertNull($valueInCache);
+        $this->assertEqualsWithDelta(99, $ttl, 1);
     }
 
     public function test_ttl_function_takes_precedence_over_property()
@@ -619,7 +646,7 @@ class CacheObjectTest extends TestCase
         $object = new class
         {
             public $key = 'name';
-            public $ttl = 2;
+            public $ttl = 1;
 
             public function resolve(): mixed
             {
@@ -628,26 +655,19 @@ class CacheObjectTest extends TestCase
 
             public function ttl()
             {
-                return 1;
+                return 99;
             }
         };
 
-        $result = Cache::value($object);
-        $valueInCache = Cache::get('name');
+        Cache::value($object);
+        $ttl = Cache::store()->connection()->ttl(Cache::store()->getPrefix().'name');
 
-        $this->assertSame('Taylor', $result);
-        $this->assertSame('Taylor', $valueInCache);
-
-        sleep(1);
-
-        $valueInCache = Cache::get('name');
-
-        $this->assertNull($valueInCache);
+        $this->assertEqualsWithDelta(99, $ttl, 1);
     }
 
     public function test_it_uses_method_injection_for_ttl()
     {
-        $this->app->instance(MyTestService::class, new MyTestService(1));
+        $this->app->instance(MyTestService::class, new MyTestService(99));
         $object = new class
         {
             public $key = 'name';
@@ -663,17 +683,10 @@ class CacheObjectTest extends TestCase
             }
         };
 
-        $result = Cache::value($object);
-        $valueInCache = Cache::get('name');
+        Cache::value($object);
+        $ttl = Cache::store()->connection()->ttl(Cache::store()->getPrefix().'name');
 
-        $this->assertSame('Taylor', $result);
-        $this->assertSame('Taylor', $valueInCache);
-
-        sleep(1);
-
-        $valueInCache = Cache::get('name');
-
-        $this->assertNull($valueInCache);
+        $this->assertEqualsWithDelta(99, $ttl, 1);
     }
 
     public function test_it_can_warm_the_cache_with_in_memory_value()
