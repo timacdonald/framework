@@ -1142,6 +1142,47 @@ class CacheObjectTest extends TestCase
         $this->assertSame($result, []);
     }
 
+    public function test_it_can_memoize_per_instance_via_once_helper()
+    {
+        $this->freezeTime();
+        $factory = fn () => new class
+        {
+            public $key = 'time';
+
+            public function resolve()
+            {
+                return (string) now()->getTimestamp();
+            }
+
+            public function hydrate($value)
+            {
+                return once(fn () => "Resolved: $value Hydrated: ".now()->getTimestamp());
+            }
+        };
+        $first = $factory();
+        $second = $factory();
+
+        $firstValue = Cache::value($first);
+
+        $this->assertSame('Resolved: '.now()->getTimestamp().' Hydrated: '.now()->getTimestamp(), $firstValue);
+
+        $this->travel(5)->seconds();
+
+        $firstValue = Cache::value($first);
+        $secondValue = Cache::value($second);
+
+        $this->assertSame('Resolved: '.now()->subSeconds(5)->getTimestamp().' Hydrated: '.now()->subSeconds(5)->getTimestamp(), $firstValue);
+        $this->assertSame('Resolved: '.now()->subSeconds(5)->getTimestamp().' Hydrated: '.now()->getTimestamp(), $secondValue);
+
+        $this->travel(5)->seconds();
+
+        $firstValue = Cache::value($first);
+        $secondValue = Cache::value($second);
+
+        $this->assertSame('Resolved: '.now()->subSeconds(10)->getTimestamp().' Hydrated: '.now()->subSeconds(10)->getTimestamp(), $firstValue);
+        $this->assertSame('Resolved: '.now()->subSeconds(10)->getTimestamp().' Hydrated: '.now()->subSeconds(5)->getTimestamp(), $secondValue);
+    }
+
     public function test_it_can_warm_the_cache_with_in_memory_value()
     {
         $object = new class
