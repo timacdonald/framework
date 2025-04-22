@@ -26,6 +26,7 @@ use ReflectionMethod;
 use RuntimeException;
 use SplObjectStorage;
 use Stringable;
+use WeakMap;
 
 /**
  * Does using `app()->call($c->hydrate(...), ['value' => $value])` feel clunky
@@ -109,14 +110,50 @@ class CacheObjectTest extends TestCase
                         ->only($keyMap->keys())
                         ->map(fn ($value) => value($value));
 
+                    $flexibleTtlMap = new WeakMap;
+
+                    $ttlGrouped = $keyMap
+                        ->except($memoized->keys())
+                        ->groupBy(function ($cacheable) use ($resolveTtl, $flexibleTtlMap) {
+                            $ttl = $resolveTtl($cacheable);
+
+                            if (is_array($ttl)) {
+                                $flexibleTtlMap[$cacheable] = $ttl;
+
+                                return 'flexible';
+                            }
+
+                            return $ttl;
+                        }, preserveKeys: true);
+
+                    [$flexible, $ttlGrouped] = [
+                        $ttlGrouped->get('flexible', collect()),
+                        $ttlGrouped->except('flexible'),
+                    ];
+
+                    $flexiblelyCached = $flexible->map(function ($cacheable, $key) use ($store, $flexibleTtlMap) {
+                        $value = app()->call($cacheable->resolve(...));
+
+                        Cache::store($store)->flexible($key, $flexibleTtlMap[$cacheable], $value);
+
+                        return $value;
+                    });
+
                     $cached = collect(Cache::store($store)
-                        ->many($keyMap->except($memoized->keys())->keys()->all()))
+                        ->many($keyMap->except([
+                            ...$memoized->keys(),
+                            ...$flexiblelyCached->keys(),
+                        ])->keys()->all()))
                         ->reject(fn ($value) => $value === null);
 
-                    $resolved = $keyMap
-                        ->except([...$memoized->keys(), ...$cached->keys()])
-                        ->groupBy(fn ($cacheable, $key) => $resolveTtl($cacheable), preserveKeys: true)
-                        ->flatMap(function ($ttlGroup, $ttl) use ($store, $memo) {
+                    $resolved = $ttlGrouped
+                        ->flatMap(function ($ttlGroup, $ttl) use ($store, $memo, $flexibleTtlMap, $memoized, $cached, $flexiblelyCached) {
+                            $ttlGroup = $ttlGroup->except([
+                                ...$memoized->keys(),
+                                ...$flexiblelyCached->keys(),
+                                ...$cached->keys(),
+                            ]);
+
                             $ttl = $ttl === '' ? null : $ttl;
 
                             $values = $ttlGroup
@@ -131,7 +168,7 @@ class CacheObjectTest extends TestCase
                             return $values;
                         });
 
-                    return collect([...$cached, ...$resolved])
+                    return collect([...$cached, ...$flexiblelyCached, ...$resolved])
                         ->map(function ($value, $key) use ($hydrate, $store, $keyMap, $memo) {
                             $value = $hydrate($keyMap[$key], $value);
 
@@ -1194,7 +1231,7 @@ class CacheObjectTest extends TestCase
         $created = Cache::get('illuminate:cache:flexible:created:name');
 
         $this->assertCount(0, defer());
-        $this->assertSame($created, now()->getTimestamp());
+        $this->assertSame($created, (string) now()->getTimestamp());
         $this->assertSame('Resolved 1', $result);
         $this->assertSame('Resolved 1', $valueInCache);
 
@@ -1205,7 +1242,7 @@ class CacheObjectTest extends TestCase
         $created = Cache::get('illuminate:cache:flexible:created:name');
 
         $this->assertCount(0, defer());
-        $this->assertSame($created, now()->subSeconds(5)->getTimestamp());
+        $this->assertSame($created, (string) now()->subSeconds(5)->getTimestamp());
         $this->assertSame('Resolved 1', $result);
         $this->assertSame('Resolved 1', $valueInCache);
 
