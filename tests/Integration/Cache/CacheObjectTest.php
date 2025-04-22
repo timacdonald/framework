@@ -132,13 +132,11 @@ class CacheObjectTest extends TestCase
                     ];
 
                     $flexiblelyCached = $flexible->map(function ($cacheable, $key) use ($store, $flexibleTtlMap) {
-                        $value = app()->call($cacheable->resolve(...));
-
-                        Cache::store($store)->flexible($key, $flexibleTtlMap[$cacheable], $value);
-
-                        return $value;
+                        return Cache::store($store)
+                            ->flexible($key, $flexibleTtlMap[$cacheable], app()->wrap($cacheable->resolve(...)));
                     });
 
+                    // TODO Don't do this if there aren't any to retrieve!
                     $cached = collect(Cache::store($store)
                         ->many($keyMap->except([
                             ...$memoized->keys(),
@@ -158,6 +156,7 @@ class CacheObjectTest extends TestCase
 
                             $values = $ttlGroup
                                 ->map(fn ($cacheable, $key) => app()->call($cacheable->resolve(...)));
+
 
                             if ($values->containsOneItem()) {
                                 Cache::store($store)->put($values->keys()->first(), $values->first(), $ttl);
@@ -1253,7 +1252,7 @@ class CacheObjectTest extends TestCase
         $created = Cache::get('illuminate:cache:flexible:created:name');
 
         $this->assertCount(1, defer());
-        $this->assertSame($created, now()->subSeconds(10)->getTimestamp());
+        $this->assertSame($created, (string) now()->subSeconds(10)->getTimestamp());
         $this->assertSame('Resolved 1', $result);
         $this->assertSame('Resolved 1', $valueInCache);
 
@@ -1265,9 +1264,29 @@ class CacheObjectTest extends TestCase
         $ttl = Cache::store()->connection()->ttl(Cache::store()->getPrefix().'name');
 
         $this->assertCount(1, defer());
-        $this->assertSame($created, now()->getTimestamp());
-        $this->assertSame('Resolved 2', $result);
+        $this->assertSame($created, (string) now()->subSeconds(15)->getTimestamp());
+        $this->assertSame('Resolved 1', $result);
+        $this->assertSame('Resolved 1', $valueInCache);
+
+        defer()->invoke();
+
+        $valueInCache = Cache::get('name');
+        $created = Cache::get('illuminate:cache:flexible:created:name');
+        $ttl = Cache::store()->connection()->ttl(Cache::store()->getPrefix().'name');
+
+        $this->assertCount(0, defer());
+        $this->assertSame($created, (string) now()->getTimestamp());
         $this->assertSame('Resolved 2', $valueInCache);
+
+        $result = Cache::value($object);
+        $valueInCache = Cache::get('name');
+        $created = Cache::get('illuminate:cache:flexible:created:name');
+        $ttl = Cache::store()->connection()->ttl(Cache::store()->getPrefix().'name');
+
+        $this->assertCount(0, defer());
+        $this->assertSame($created, (string) now()->getTimestamp());
+        $this->assertSame('Resolved 2', $valueInCache);
+        $this->assertSame('Resolved 2', $result);
     }
 
     public function test_warming_flushes_memoized_value()
