@@ -96,7 +96,8 @@ class CacheObjectTest extends TestCase
                         });
 
                     $memoized = collect($memo[$store] ?? [])
-                        ->only($keyMap->keys());
+                        ->only($keyMap->keys())
+                        ->map(fn ($value) => value($value));
 
                     $cached = collect(Cache::store($store)
                         ->many($keyMap->except($memoized->keys())->keys()->all()))
@@ -133,7 +134,7 @@ class CacheObjectTest extends TestCase
                                 ];
                             }
 
-                            return $value;
+                            return value($value);
                         })->merge($memoized);
                 });
 
@@ -982,6 +983,66 @@ class CacheObjectTest extends TestCase
         $this->assertNull($valueInArrayStore);
         $this->assertSame('Resolve: '.now()->subMinute()->getTimestamp().' Hydrate: '.now()->subMinute()->getTimestamp(), $redisStoreResult);
         $this->assertNull($valueInRedisStore);
+    }
+
+    public function test_can_memoize_resolve_but_not_hydrate_by_returning_a_closure_from_hydrate()
+    {
+        $this->freezeTime();
+        $factory = fn ($store) => new MemoizedObject(
+            key: 'time',
+            resolve: fn () => 'Resolve: '.now()->getTimestamp(),
+            hydrate: fn ($value) => fn () => $value.' Hydrate: '.now()->getTimestamp(),
+            store: $store,
+        );
+
+        $arrayStoreResult = Cache::value($factory('array'));
+        $valueInArrayStore = Cache::store('array')->get('time');
+
+        $this->assertSame('Resolve: '.now()->getTimestamp().' Hydrate: '.now()->getTimestamp(), $arrayStoreResult);
+        $this->assertSame('Resolve: '.now()->getTimestamp(), $valueInArrayStore);
+
+        $this->travelTo(now()->addMinute());
+        Cache::store('array')->forget('time');
+
+        $arrayStoreResult = Cache::value($factory('array'));
+        $valueInArrayStore = Cache::store('array')->get('time');
+        $redisStoreResult = Cache::value($factory('redis'));
+        $valueInRedisStore = Cache::store('redis')->get('time');
+
+        $this->assertSame('Resolve: '.now()->subMinute()->getTimestamp().' Hydrate: '.now()->getTimestamp(), $arrayStoreResult);
+        $this->assertNull($valueInArrayStore);
+        $this->assertSame('Resolve: '.now()->getTimestamp().' Hydrate: '.now()->getTimestamp(), $redisStoreResult);
+        $this->assertSame('Resolve: '.now()->getTimestamp(), $valueInRedisStore);
+
+        $this->travelTo(now()->addMinute());
+        Cache::store('redis')->forget('time');
+
+        $arrayStoreResult = Cache::value($factory('array'));
+        $valueInArrayStore = Cache::store('array')->get('time');
+        $redisStoreResult = Cache::value($factory('redis'));
+        $valueInRedisStore = Cache::store('redis')->get('time');
+
+        $this->assertSame('Resolve: '.now()->subMinutes(2)->getTimestamp().' Hydrate: '.now()->getTimestamp(), $arrayStoreResult);
+        $this->assertNull($valueInArrayStore);
+        $this->assertSame('Resolve: '.now()->subMinute()->getTimestamp().' Hydrate: '.now()->getTimestamp(), $redisStoreResult);
+        $this->assertNull($valueInRedisStore);
+    }
+
+    public function test_closure_returned_from_hydrate_does_not_receive_args()
+    {
+        $this->freezeTime();
+        $factory = fn ($store) => new MemoizedObject(
+            key: 'time',
+            resolve: fn () => 'Resolve: '.now()->getTimestamp(),
+            hydrate: fn ($value) => fn (...$args) => $args,
+            store: $store,
+        );
+
+        $result = Cache::value($factory('array'));
+        $this->assertSame($result, []);
+
+        $result = Cache::value($factory('array'));
+        $this->assertSame($result, []);
     }
 
     public function test_it_can_warm_the_cache_with_in_memory_value()
