@@ -56,9 +56,19 @@ class CacheObjectTest extends TestCase
 
         $resolveStore = fn ($cacheable) => $resolveMethodOrProperty($cacheable, 'store');
 
-        $hydrate = fn ($cacheable, $value) => method_exists($cacheable, 'hydrate')
-            ? app()->call($cacheable->hydrate(...), ['value' => $value])
-            : $value;
+        $hydrate = function ($cacheable, $value) {
+            if (! method_exists($cacheable, 'hydrate')) {
+                return $value;
+            }
+
+            $parameters = (new ReflectionMethod($cacheable, 'hydrate'))->getParameters();
+
+            if ($parameters === []) {
+                return $cacheable->hydrate($value);
+            }
+
+            return app()->call($cacheable->hydrate(...), [$parameters[0]->getName() => $value]);
+        };
 
         $memo = collect([]);
         Cache::macro('value', fn ($cacheable) => Cache::values([$cacheable])[0]);
@@ -111,7 +121,6 @@ class CacheObjectTest extends TestCase
 
                             $values = $ttlGroup
                                 ->map(fn ($cacheable, $key) => app()->call($cacheable->resolve(...)));
-
 
                             if ($values->containsOneItem()) {
                                 Cache::store($store)->put($values->keys()->first(), $values->first(), $ttl);
@@ -532,7 +541,7 @@ class CacheObjectTest extends TestCase
         $this->assertSame(now()->getTimestamp(), $result);
         $this->assertSame((string) now()->getTimestamp(), $valueInCache);
 
-        $this->travelTo(now()->addSeconds(10));
+        $this->travel(10)->seconds();
 
         $result = Cache::value($object);
         $valueInCache = Cache::get('time');
@@ -606,6 +615,58 @@ class CacheObjectTest extends TestCase
             public function hydrate($value, MyTestService $service)
             {
                 return "{$value} {$service->value}";
+            }
+        };
+
+        $result = Cache::value($object);
+        $valueInCache = Cache::get('name');
+
+        $this->assertSame('Taylor Otwell', $result);
+        $this->assertSame('Taylor', $valueInCache);
+    }
+
+    public function test_it_can_name_first_hydrate_parameter_anything()
+    {
+
+        $this->app->instance(MyTestService::class, new MyTestService('Otwell'));
+        $object = new class
+        {
+            public $key = 'name';
+
+            public function resolve()
+            {
+                return 'Taylor';
+            }
+
+            public function hydrate($foo, MyTestService $service)
+            {
+                return "{$foo} {$service->value}";
+            }
+        };
+
+        $result = Cache::value($object);
+        $valueInCache = Cache::get('name');
+
+        $this->assertSame('Taylor Otwell', $result);
+        $this->assertSame('Taylor', $valueInCache);
+    }
+
+    public function test_it_always_passes_the_value_even_when_no_parameters_specified()
+    {
+        $object = new class
+        {
+            public $key = 'name';
+
+            public function resolve()
+            {
+                return 'Taylor';
+            }
+
+            public function hydrate()
+            {
+                $value = func_get_args()[0];
+
+                return "{$value} Otwell";
             }
         };
 
@@ -932,7 +993,7 @@ class CacheObjectTest extends TestCase
         $this->assertSame('Resolve: '.now()->getTimestamp().' Hydrate: '.now()->getTimestamp(), $result);
         $this->assertSame('Resolve: '.now()->getTimestamp(), $valueInCache);
 
-        $this->travelTo(now()->addMinute());
+        $this->travel(1)->minute();
         Cache::forget('time');
 
         $result = Cache::value($object);
@@ -958,7 +1019,7 @@ class CacheObjectTest extends TestCase
         $this->assertSame('Resolve: '.now()->getTimestamp().' Hydrate: '.now()->getTimestamp(), $arrayStoreResult);
         $this->assertSame('Resolve: '.now()->getTimestamp(), $valueInArrayStore);
 
-        $this->travelTo(now()->addMinute());
+        $this->travel(1)->minute();
         Cache::store('array')->forget('time');
 
         $arrayStoreResult = Cache::value($factory('array'));
@@ -971,7 +1032,7 @@ class CacheObjectTest extends TestCase
         $this->assertSame('Resolve: '.now()->getTimestamp().' Hydrate: '.now()->getTimestamp(), $redisStoreResult);
         $this->assertSame('Resolve: '.now()->getTimestamp(), $valueInRedisStore);
 
-        $this->travelTo(now()->addMinute());
+        $this->travel(1)->minute();
         Cache::store('redis')->forget('time');
 
         $arrayStoreResult = Cache::value($factory('array'));
@@ -1001,7 +1062,7 @@ class CacheObjectTest extends TestCase
         $this->assertSame('Resolve: '.now()->getTimestamp().' Hydrate: '.now()->getTimestamp(), $arrayStoreResult);
         $this->assertSame('Resolve: '.now()->getTimestamp(), $valueInArrayStore);
 
-        $this->travelTo(now()->addMinute());
+        $this->travel(1)->minute();
         Cache::store('array')->forget('time');
 
         $arrayStoreResult = Cache::value($factory('array'));
@@ -1014,7 +1075,7 @@ class CacheObjectTest extends TestCase
         $this->assertSame('Resolve: '.now()->getTimestamp().' Hydrate: '.now()->getTimestamp(), $redisStoreResult);
         $this->assertSame('Resolve: '.now()->getTimestamp(), $valueInRedisStore);
 
-        $this->travelTo(now()->addMinute());
+        $this->travel(1)->minute();
         Cache::store('redis')->forget('time');
 
         $arrayStoreResult = Cache::value($factory('array'));
@@ -1109,6 +1170,69 @@ class CacheObjectTest extends TestCase
         $this->assertTrue($returnedWarmValue);
     }
 
+    public function test_it_can_use_flexible()
+    {
+        $this->freezeTime();
+        $object = new class
+        {
+            public $key = 'name';
+
+            public $ttl = [7, 12];
+
+            public $resolved = 0;
+
+            public function resolve()
+            {
+                $this->resolved++;
+
+                return "Resolved {$this->resolved}";
+            }
+        };
+
+        $result = Cache::value($object);
+        $valueInCache = Cache::get('name');
+        $created = Cache::get('illuminate:cache:flexible:created:name');
+
+        $this->assertCount(0, defer());
+        $this->assertSame($created, now()->getTimestamp());
+        $this->assertSame('Resolved 1', $result);
+        $this->assertSame('Resolved 1', $valueInCache);
+
+        $this->travel(5)->seconds();
+
+        $result = Cache::value($object);
+        $valueInCache = Cache::get('name');
+        $created = Cache::get('illuminate:cache:flexible:created:name');
+
+        $this->assertCount(0, defer());
+        $this->assertSame($created, now()->subSeconds(5)->getTimestamp());
+        $this->assertSame('Resolved 1', $result);
+        $this->assertSame('Resolved 1', $valueInCache);
+
+        $this->travel(5)->seconds();
+
+        $result = Cache::value($object);
+        $valueInCache = Cache::get('name');
+        $created = Cache::get('illuminate:cache:flexible:created:name');
+
+        $this->assertCount(1, defer());
+        $this->assertSame($created, now()->subSeconds(10)->getTimestamp());
+        $this->assertSame('Resolved 1', $result);
+        $this->assertSame('Resolved 1', $valueInCache);
+
+        $this->travel(5)->seconds();
+
+        $result = Cache::value($object);
+        $valueInCache = Cache::get('name');
+        $created = Cache::get('illuminate:cache:flexible:created:name');
+        $ttl = Cache::store()->connection()->ttl(Cache::store()->getPrefix().'name');
+
+        $this->assertCount(1, defer());
+        $this->assertSame($created, now()->getTimestamp());
+        $this->assertSame('Resolved 2', $result);
+        $this->assertSame('Resolved 2', $valueInCache);
+    }
+
     public function test_warming_flushes_memoized_value()
     {
         $this->markTestIncomplete();
@@ -1123,16 +1247,11 @@ class CacheObjectTest extends TestCase
         $this->markTestIncomplete();
     }
 
-    public function test_it_can_use_flexible()
-    {
-        $this->markTestIncomplete();
-    }
 
     public function test_it_can_be_used_with_locks_and_other_cache_features()
     {
         $this->markTestIncomplete('Dunno about this');
     }
-
 }
 
 class MyTestService
