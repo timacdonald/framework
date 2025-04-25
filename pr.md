@@ -1,8 +1,8 @@
-# Cache Objects
+# Cache objects
 
 ## What
 
-This PR introduces a new concept to the framework known as Cache Objects. Cache Objects can house caching logic for improved re-use throughout your application.
+This PR introduces a new concept to the framework known as Cache objects. Cache objects can house caching logic for improved re-use throughout your application.
 
 Cache objects can also be kept warm via the scheduler. We introduced `Cache::flexible` to remove empty cache hits in favour of stale cache hits. With cache object warming via the scheduler, you can now remove stale and empty cache hits in favour of a always-warm cache.
 
@@ -170,7 +170,7 @@ $username = Cache::remember(
 );
 ```
 
-I'm starting to smell primitive obsession; also, when I see this code, it screams out for a framework-first abstraction.
+I'm starting to smell primitive obsession. Also, when I see this code it screams out for a framework-first abstraction.
 
 So I built one.
 
@@ -212,20 +212,20 @@ $username = Cache::value(new GitHubUsername($user));
 $username = Cache::value(new GitHubUsername($user));
 ```
 
-A developer-facing cache object API is only half the story. With first-party Cache Objects, Laravel can offer the ability to keep the cache objects warm via the scheduler. The following example will warm the cache with all the U.S. AWS regions and also warm the GitHub username cache for high-traffic users.
+A developer-facing cache object API is only half the story. With first-party Cache objects, Laravel can offer the ability to keep the cache objects warm via the scheduler. The following example will warm the cache with all the U.S. AWS regions and also warm the GitHub username cache for high-traffic users.
 
 ```php
 <?php
 
-Schedule::warm([
+Schedule::warm(fn () => [
     new AwsRegions('us'),
-    fn () => User::highTraffic()->get()->mapInto(GithubUsername::class);
+    ...User::highTraffic()->get()->mapInto(GithubUsername::class);
 ])->everyHour();
 ```
 
-## Cache Objects
+## Cache objects
 
-The follow expresses the basics of a cache object: a cache key and a `resolve` method.
+The follow expresses the basics of a cache object: a cache key and a `resolve` method:
 
 ```php
 <?php
@@ -286,7 +286,7 @@ class LaravelWebsite
 }
 ```
 
-The cache key may be specified in a public property, as seen in the `LaravelWebsite` example class, or if a dynamic key is required, as seen in the `GitHubUsername` example class, a `key` method may be used.
+The cache key may be specified in a public property, as seen in the `LaravelWebsite` example class, or if a dynamic key is required, as seen in the `GitHubUsername` example class, a `key` method may be used:
 
 ```php
 <?php
@@ -324,7 +324,7 @@ The `key` method is also called by the container allowing method injection.
 
 ### TTL
 
-Without a TTL is not specified, the value will be cached forever.
+Without a TTL specified, the value will be cached forever.
 
 A TTL may be specified via a public `$ttl` property:
 
@@ -394,9 +394,9 @@ class LaravelWebsite
 }
 ```
 
-The TTL may also be a `DateTimeInterface` or `DateInterval`, as it already common when using the Cache.
+The TTL may also be a `DateTimeInterface` or `DateInterval`, as is common when using the Cache.
 
-Cache objects also allow durations to be specified as strings, either as a date string:
+Cache objects also allow durations to be specified as strings, either as a _date string_:
 
 ```php
 <?php
@@ -438,7 +438,7 @@ class LaravelWebsite
 
 ### Flexible (stale while revalidate)
 
-It is possible to use the `Cache::flexible` feature with cache objects by using a tuple as the TTL:
+It is possible to use the `Cache::flexible` feature with cache objects by using the tuple pattern, as seen in the `Cache::flexible` API, for the TTL:
 
 ```php
 <?php
@@ -460,15 +460,16 @@ class LaravelWebsite
 
 ### Hydrating values
 
-Often, you want to store a raw value in the cache but have a rich value returned. The `hydrate` method allows you intercept the value coming from the cache and make alterations to the returned value.
+Often, you want to store a raw value in the cache that is then _hydrated_ into a rich object. The `hydrate` method allows you intercept the value coming from the cache and make alterations to the returned value.
 
-In the following example, the raw HTML will be stored in the cache. When the cache object value is retrieved, a `HtmlString` instance will be returned.
+In the following example, the raw HTML will be stored in the cache. When the cache object value is retrieved, a `HtmlString` instance will be returned:
 
 ```php
 <?php
 
 namespace App\Cache;
 
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\HtmlString;
 
 class LaravelWebsite
@@ -485,9 +486,9 @@ class LaravelWebsite
      *
      * @return mixed
      */
-    public function resolve(Factory $http)
+    public function resolve()
     {
-        return $http->get('https://laravel.com')
+        return Http::get('https://laravel.com')
             ->throw()
             ->body();
     }
@@ -538,7 +539,7 @@ class LaravelWebsite
 
 ### Memoizing values
 
-Similar to the recently introduced `Cache::memo` feature, cache objects can also have their values memoized to  ensure they are only retrieved from the cache once per request, job, or command.
+Similar to the recently introduced `Cache::memo` feature, Cache objects can also have their value memoized to ensure they are only retrieved from the cache once per request, job, or command, by attaching the `Memoized` attribute to the class:
 
 ```php
 <?php
@@ -546,6 +547,7 @@ Similar to the recently introduced `Cache::memo` feature, cache objects can also
 namespace App\Cache;
 
 use Illuminate\Cache\Attributes\Memoize;
+use Illuminate\Support\Facades\Http;
 
 #[Memoize]
 class LaravelWebsite
@@ -575,7 +577,7 @@ $html = Cache::value(new LaravelWebsite); // Does not hit the cache
 $html = Cache::value(new LaravelWebsite); // Does not hit the cache
 ```
 
-In the above example, the value returned from the `resolve` method is stored in memory for the lifetime of the request. If the cache object is retrieved again, the in-memory value will be returned rather than hitting the cache.
+In the above example, the cached value is stored in memory for the lifetime of the request. If the cache object is retrieved again, the in-memory value will be returned rather than hitting the cache.
 
 When the `hydrate` method is present, the value returned from the `hydrate` method will be memoized.
 
@@ -585,6 +587,8 @@ When the `hydrate` method is present, the value returned from the `hydrate` meth
 namespace App\Cache;
 
 use Illuminate\Cache\Attributes\Memoize;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\HtmlString;
 
 #[Memoize]
 class LaravelWebsite
@@ -608,9 +612,9 @@ class LaravelWebsite
             ->body();
     }
 
-    public function hydrate($value)
+    public function hydrate($html)
     {
-        return new HtmlString($value);
+        return new HtmlString($html);
     }
 }
 
@@ -619,7 +623,7 @@ $htmlString = Cache::value(new LaravelWebsite); // Does not hit the cache and re
 $htmlString = Cache::value(new LaravelWebsite); // Does not hit the cache and re-uses the existing HtmlString instance
 ```
 
-Keep in mind that modifications to the memoized object will be persistent across retrievals:
+Keep in mind as the object is re-used, any mutations to the memoized object will be persistent across retrievals:
 
 ```php
 <?php
@@ -627,6 +631,8 @@ Keep in mind that modifications to the memoized object will be persistent across
 namespace App\Cache;
 
 use Illuminate\Cache\Attributes\Memoize;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\HtmlString;
 
 #[Memoize]
 class LaravelWebsite
@@ -650,9 +656,9 @@ class LaravelWebsite
             ->body();
     }
 
-    public function hydrate($value)
+    public function hydrate($html)
     {
-        return new HtmlString($value);
+        return new HtmlString($html);
     }
 }
 
@@ -665,7 +671,7 @@ assert($firstHtmlString === $secondHtmlString);
 assert($secondHtmlString->toHtml() === 'foo');
 ```
 
-If you intention is to have the cached value memoized and have the hydrate still be called on each retrieval, you may return a `Closure` from the hydrate method:
+If your intention is to have the raw cached value memoized and have the hydrate be called on each retrieval, you may return a `Closure` from the hydrate method. This can be used to ensure that a different object instance is returned but the cache is only hit one time:
 
 ```php
 <?php
@@ -673,6 +679,8 @@ If you intention is to have the cached value memoized and have the hydrate still
 namespace App\Cache;
 
 use Illuminate\Cache\Attributes\Memoize;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\HtmlString;
 
 #[Memoize]
 class LaravelWebsite
@@ -696,9 +704,9 @@ class LaravelWebsite
             ->body();
     }
 
-    public function hydrate($value)
+    public function hydrate($html)
     {
-        return fn () => new HtmlString($value);
+        return fn () => new HtmlString($html);
     }
 }
 
@@ -713,7 +721,7 @@ assert($secondHtmlString->toHtml() !== 'foo');
 
 ### Configuring the store
 
-The cache objects own the store they belong to. They use the default store when none is specified.
+The cache object owns the store it belong to. The default store is used when none is specified.
 
 You may specify a store via the `$store` property:
 
@@ -764,7 +772,6 @@ The `store` method will be called via the container allowing method injection.
 
 If you would like to have access to the repository class within your cache object, you may implement the `RepositoryAware` contract:
 
-```php
 ```php
 <?php
 
@@ -847,9 +854,12 @@ Cache::values([
 ]);
 ```
 
+> [!NOTE]
+> The implementation intelligently retrieves values from the cache based on the store. It also optimizes writes to the cache by grouping by TTL and using `Cache::putMany` where possible.
+
 ## Warming the cache
 
-Sometimes you want to pro-actively warm the cache from a value already easily accessible that might otherwise be more expensive to compute in order to improve an anticipated future request.
+Sometimes you want to pro-actively warm the cache from a value already easily accessible, that might otherwise be more expensive to compute, in order to improve an anticipated future request.
 
 Imagine you cache a URL encoded representation of each user's profile image so that it does not need to be downloaded by the user or retrieved from storage.
 
@@ -908,7 +918,7 @@ public function update(UpdateProfileImageRequest $request)
 
     $valueToCache = 'data:image/png;base64,'.base64_encode($request->image->getContents());
 
-    Cache::warm(new ProfileImage($request->user()->id, $valueToCache);
+    Cache::warm(new ProfileImage($request->user()->id, $valueToCache));
 
     return redirect("/me/");
 }
@@ -981,13 +991,13 @@ public function update(UpdateProfileImageRequest $request)
         'path' => $request->image->store('profile-image'),
     ]);
 
-    Cache::warm(new ProfileImage($request->user()->id, $request->image);
+    Cache::warm(new ProfileImage($request->user()->id, $request->image));
 
     return redirect("/me/");
 }
 ```
 
-The `dehydrate` method may accept multiple different values. For example, it could support both the string and the `UploadedFile`:
+The `dehydrate` method may accept multiple different values. For example, it could support both the `string` and the `UploadedFile`:
 
 ```php
 <?php
@@ -1017,12 +1027,12 @@ Like the `hydrate` method, the `dehydrate` method is called by the container all
 
 ### Warming without a value
 
-It is possible to warm a cache object without having the value to pass into the `Cache::warm` method. Calling `Cache::warm` and passing the cache object will force the `resolve` method to be called and the value in the cache to be refreshed.
+It is possible to warm a cache object without having the value to pass into the `Cache::warm` method. Calling `Cache::warm` and passing only the cache object will invoke the `resolve` method and the returned value will be refreshed in the cache.
 
 ```php
 <?php
 
-Cache::warm(new LaravelWebsite);
+Cache::warm(LaravelWebsite::class);
 ```
 
 You can warm multiple cache objects at one:
@@ -1038,9 +1048,9 @@ Cache::warm([
 
 ## Warming via the scheduler
 
-Warming the cache manually works great, however keep the cache warm without having direct interaction is another. This is where the scheduler comes in. Imagine you want to keep the Laravel website cache warm even if you don't have users hitting it right now.
+Warming the cache manually works great, however keeping the cache warm without having direct interaction is another thing. This is where the scheduler comes in. 
 
-You can configure the schedule to warm objects as needed:
+Imagine you want to keep the Laravel website cache warm so no user ever receives a stale or empty cache hit. You can configure the schedule to warm objects as needed:
 
 ```php
 <?php
@@ -1050,7 +1060,7 @@ Schedule::warm([
 ])->everyHour();
 ```
 
-There are other items you might want to refresh slower:
+You may configure multiple warm schedules as needed:
 
 ```php
 <?php
@@ -1060,8 +1070,8 @@ Schedule::warm([
     // ...
 ])->everyDay();
 
-Schedule::warm([
-    fn () => User::highTraffic()->get()->mapInto(GithubUsername::class);
+Schedule::warm(fn () => [
+    ...User::highTraffic()->get()->mapInto(GithubUsername::class);
     // ...
 ])->everyFiveMinutes();
 ```
