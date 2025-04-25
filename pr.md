@@ -13,7 +13,7 @@ I often find myself duplicating cache interactions throughout a code base.
 ```php
 <?php
 
-$username = Cache::remember("github-username:{$user->github_id}", now()->addHours(24), function () use ($user) {
+$username = Cache::remember("github-username:{$user->id}", now()->addHours(24), function () use ($user) {
     return Http::withToken($user->github_token)
         ->get('https://github.com/api/...')
         ->json('data.username');
@@ -21,7 +21,7 @@ $username = Cache::remember("github-username:{$user->github_id}", now()->addHour
 
 // somewhere else in the code base...
 
-$username = Cache::remember("github-username:{$user->github_id}", now()->addHour(), function () use ($user) {
+$username = Cache::remember("github-username:{$user->id}", now()->addHour(), function () use ($user) {
     return Http::withToken($user->github_token)
         ->get('https://github.com/api/...')
         ->throw()
@@ -55,7 +55,7 @@ class GitHubUsername
 $resolver = new GitHubUsername($user);
 
 $username = Cache::remember(
-    "github-username:{$user->github_id}",
+    "github-username:{$user->id}",
     now()->addHours(24),
     fn () => $resolver->resolve(), // does not accept a callable
 );
@@ -65,7 +65,7 @@ $username = Cache::remember(
 $resolver = new GitHubUsername($user);
 
 $username = Cache::remember(
-    "github-username:{$user->github_id}",
+    "github-username:{$user->id}",
     now()->addHour(),
     fn () => $resolver->resolve(), // does not accept a callable
 );
@@ -102,7 +102,7 @@ class GitHubUsername
 $resolver = new GitHubUsername($user);
 
 $username = Cache::remember(
-    "github-username:{$user->github_id}",
+    "github-username:{$user->id}",
     $resolver->ttl(),
     fn () => $resolver->resolve(),
 );
@@ -112,7 +112,7 @@ $username = Cache::remember(
 $resolver = new GitHubUsername($user);
 
 $username = Cache::remember(
-    "github-username:{$user->github_id}",
+    "github-username:{$user->id}",
     $resolver->ttl(),
     fn () => $resolver->resolve(),
 );
@@ -132,7 +132,7 @@ class GitHubUsername
 
     public function key()
     {
-        return "github-username:{$this->user->github_id}";
+        return "github-username:{$this->user->id}";
     }
 
     public function ttl()
@@ -186,7 +186,7 @@ class GitHubUsername
 
     public function key()
     {
-        return "github-username:{$this->user->github_id}";
+        return "github-username:{$this->user->id}";
     }
 
     public function ttl()
@@ -268,12 +268,7 @@ use Illuminate\Http\Client\Factory;
 
 class LaravelWebsite
 {
-    /**
-     * The cache key.
-     *
-     * @var string
-     */
-    public $key = 'laravel-website';
+    // ...
 
     /**
      * Resolve the value to store in the cache.
@@ -289,5 +284,110 @@ class LaravelWebsite
 }
 ```
 
-- [ ] Method injection
+The cache key may be specified in a public property, as seen in the `LaravelWebsite` example class, or if a dynamic key is required, as seen in the `GitHubUsername` example class, a `key` method may be used.
+
+```php
+<?php
+
+namespace App\Cache;
+
+use App\Models\User;
+
+class GitHubUsername
+{
+    /**
+     * Create a new instance.
+     */
+    public function __construct(
+        private User $user,
+    ) {
+        //
+    }
+
+    /**
+     * Retrieve the cache key.
+     *
+     * @return string
+     */
+    public function key()
+    {
+        return "github-username:{$this->user->id}";
+    }
+
+    // ...
+}
+```
+
+The `key` method is also called by the container allowing method injection.
+
+### TTL
+
+When a TTL is not specified, the value will be cached forever. A TTL may be specified via a public `$ttl` property:
+
+```php
+<?php
+
+namespace App\Cache;
+
+class LaravelWebsite
+{
+    /**
+     * The cache TTL.
+     *
+     * @var \DateTimeInterface|\DateInterval|int|null
+     */
+    public $ttl = 3_600;
+
+    // ...
+}
+```
+
+Alternatively, a `ttl` method may be used:
+
+```php
+<?php
+
+namespace App\Cache;
+
+class LaravelWebsite
+{
+    /**
+     * Retrieve the cache TTL.
+     *
+     * @return \DateTimeInterface|\DateInterval|int|null
+     */
+    public function ttl()
+    {
+        return now()->addHour();
+    }
+
+    // ...
+}
+```
+
+The `ttl` method will be called by the container allowing method injection:
+
+```php
+<?php
+
+namespace App\Cache;
+
+use App\Support\Clock;
+
+class LaravelWebsite
+{
+    /**
+     * Retrieve the cache TTL.
+     *
+     * @return \DateTimeInterface|\DateInterval|int|null
+     */
+    public function ttl(Clock $clock)
+    {
+        return $clock->now()->addHour();
+    }
+
+    // ...
+}
+```
 - [ ] Casting ints to string?
+
