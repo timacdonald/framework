@@ -533,6 +533,142 @@ $html = Cache::value(new LaravelWebsite); // Does not hit the cache
 $html = Cache::value(new LaravelWebsite); // Does not hit the cache
 ```
 
+In the above example, the value returned from the `resolve` method is stored in memory for the lifetime of the request. If the cache object is retrieved again, the in-memory value will be returned rather than hitting the cache.
+
+When the `hydrate` method is present, the value returned from the `hydrate` method will be memoized.
+
+```php
+<?php
+
+namespace App\Cache;
+
+use Illuminate\Cache\Attributes\Memoize;
+
+#[Memoize]
+class LaravelWebsite
+{
+    /**
+     * The cache key.
+     *
+     * @var string
+     */
+    public $key = 'laravel-website';
+
+    /**
+     * Resolve the value to store in the cache.
+     *
+     * @return mixed
+     */
+    public function resolve()
+    {
+        return Http::get('https://laravel.com')
+            ->throw()
+            ->body();
+    }
+
+    public function hydrate($value)
+    {
+        return new HtmlString($value);
+    }
+}
+
+$htmlString = Cache::value(new LaravelWebsite); // Hits the cache and creates a new HtmlString instance
+$htmlString = Cache::value(new LaravelWebsite); // Does not hit the cache and re-uses the existing HtmlString instance
+$htmlString = Cache::value(new LaravelWebsite); // Does not hit the cache and re-uses the existing HtmlString instance
+```
+
+Keep in mind that modifications to the memoized object will be persistent across retrievals:
+
+```php
+<?php
+
+namespace App\Cache;
+
+use Illuminate\Cache\Attributes\Memoize;
+
+#[Memoize]
+class LaravelWebsite
+{
+    /**
+     * The cache key.
+     *
+     * @var string
+     */
+    public $key = 'laravel-website';
+
+    /**
+     * Resolve the value to store in the cache.
+     *
+     * @return mixed
+     */
+    public function resolve()
+    {
+        return Http::get('https://laravel.com')
+            ->throw()
+            ->body();
+    }
+
+    public function hydrate($value)
+    {
+        return new HtmlString($value);
+    }
+}
+
+$firstHtmlString = Cache::value(new LaravelWebsite);
+$firstHtmlString->html = 'foo';
+
+$secondHtmlString = Cache::value(new LaravelWebsite);
+
+assert($firstHtmlString === $secondHtmlString);
+assert($secondHtmlString->toHtml() === 'foo');
+```
+
+If you intention is to have the cached value memoized and have the hydrate still be called on each retrieval, you may return a `Closure` from the hydrate method:
+
+```php
+<?php
+
+namespace App\Cache;
+
+use Illuminate\Cache\Attributes\Memoize;
+
+#[Memoize]
+class LaravelWebsite
+{
+    /**
+     * The cache key.
+     *
+     * @var string
+     */
+    public $key = 'laravel-website';
+
+    /**
+     * Resolve the value to store in the cache.
+     *
+     * @return mixed
+     */
+    public function resolve()
+    {
+        return Http::get('https://laravel.com')
+            ->throw()
+            ->body();
+    }
+
+    public function hydrate($value)
+    {
+        return fn () => new HtmlString($value);
+    }
+}
+
+$firstHtmlString = Cache::value(new LaravelWebsite); // Hits the cache and creates a new HtmlString instance.
+$firstHtmlString->html = 'foo';
+
+$secondHtmlString = Cache::value(new LaravelWebsite); // Does not hit the cache but does create a new HtmlString instance.
+
+assert($firstHtmlString !== $secondHtmlString);
+assert($secondHtmlString->toHtml() !== 'foo');
+```
+
 ### Configuring the store
 
 The cache objects own the store they belong to. They use the default store when none is specified.
