@@ -1329,6 +1329,33 @@ class CacheObjectTest extends TestCase
                 // return 'Taylor';
             }
 
+            public function hydrate($value)
+            {
+                return "{$value} Otwell";
+            }
+        };
+
+        $returnedWarmValue = Cache::warm($object, 'Taylor');
+
+        $valueInCache = Cache::get('name');
+        $result = Cache::value($object);
+
+        $this->assertSame('Taylor', $valueInCache);
+        $this->assertSame('Taylor Otwell', $result);
+        $this->assertTrue($returnedWarmValue);
+    }
+
+    public function test_it_can_dehydrate_the_value_entering_the_cache()
+    {
+        $object = new class
+        {
+            public $key = 'name';
+
+            public function resolve()
+            {
+                // return 'Taylor';
+            }
+
             public function dehydrate($value)
             {
                 return preg_replace('/ Otwell$/', '', $value);
