@@ -987,7 +987,7 @@ public function update(UpdateProfileImageRequest $request)
 }
 ```
 
-The hydrate method may accept multiple different values. For example, it could support both the string and the `UploadedFile`:
+The `dehydrate` method may accept multiple different values. For example, it could support both the string and the `UploadedFile`:
 
 ```php
 <?php
@@ -1013,11 +1013,57 @@ class ProfileImage
 }
 ```
 
+Like the `hydrate` method, the `dehydrate` method is called by the container allowing method injection. The first parameter will always be the incoming warm value.
+
+### Warming without a value
+
+It is possible to warm a cache object without having the value to pass into the `Cache::warm` method. Calling `Cache::warm` and passing the cache object will force the `resolve` method to be called and the value in the cache to be refreshed.
+
+```php
+<?php
+
+Cache::warm(new LaravelWebsite);
+```
+
+You can warm multiple cache objects at one:
+
+```php
+<?php
+
+Cache::warm([
+    new CachedUser($team->owner->id),
+    ...$team->members->map->id->mapInto(CachedUser::class),
+]);
+```
+
 ## Warming via the scheduler
 
-// TODO
+Warming the cache manually works great, however keep the cache warm without having direct interaction is another. This is where the scheduler comes in. Imagine you want to keep the Laravel website cache warm even if you don't have users hitting it right now.
 
-- [ ] Retrieving many values.
-- [ ] Casting ints to string?
-- [ ] You cannot specify the store when retrieving values. You may retrieve across stores.
-- [ ] Other examples, e.g., Eloquent caching
+You can configure the schedule to warm objects as needed:
+
+```php
+<?php
+
+Schedule::warm([
+    LaravelWebsite::class,
+])->everyHour();
+```
+
+There are other items you might want to refresh slower:
+
+```php
+<?php
+
+Schedule::warm([
+    LaravelWebsite::class,
+    // ...
+])->everyDay();
+
+Schedule::warm([
+    fn () => User::highTraffic()->get()->mapInto(GithubUsername::class);
+    // ...
+])->everyFiveMinutes();
+```
+
+> [!NOTE] I'm considering wrapping up how often the cache value wants to be warmed into the cache object itself. That means you would not call `everyFiveMinutes` as each object would know when it was last warmed and how often it should be warmed. Not sure on that yet.
