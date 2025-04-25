@@ -1502,6 +1502,16 @@ class CacheObjectTest extends TestCase
         $this->markTestIncomplete();
     }
 
+    public function test_it_can_use_iso_durations_for_ttl()
+    {
+        $this->markTestIncomplete();
+    }
+
+    public function test_it_can_use_date_string_for_ttl()
+    {
+        $this->markTestIncomplete();
+    }
+
     public function test_it_can_control_warm_schedule()
     {
         $object = new class

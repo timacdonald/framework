@@ -338,7 +338,7 @@ class LaravelWebsite
     /**
      * The cache TTL.
      *
-     * @var \DateTimeInterface|\DateInterval|int|array{ 0: \DateTimeInterface|\DateInterval|int, 1: \DateTimeInterface|\DateInterval|int }|null
+     * @var mixed
      */
     public $ttl = 3_600;
 
@@ -358,7 +358,7 @@ class LaravelWebsite
     /**
      * Retrieve the cache TTL.
      *
-     * @return \DateTimeInterface|\DateInterval|int|array{ 0: \DateTimeInterface|\DateInterval|int, 1: \DateTimeInterface|\DateInterval|int }|null
+     * @return mixed
      */
     public function ttl()
     {
@@ -383,12 +383,54 @@ class LaravelWebsite
     /**
      * Retrieve the cache TTL.
      *
-     * @return \DateTimeInterface|\DateInterval|int|array{ 0: \DateTimeInterface|\DateInterval|int, 1: \DateTimeInterface|\DateInterval|int }|null
+     * @return mixed
      */
     public function ttl(Clock $clock)
     {
         return $clock->now()->addHour();
     }
+
+    // ...
+}
+```
+
+The TTL may also be a `DateTimeInterface` or `DateInterval`, as it already common when using the Cache.
+
+Cache objects also allow durations to be specified as strings, either as a date string:
+
+```php
+<?php
+
+namespace App\Cache;
+
+class LaravelWebsite
+{
+    /**
+     * The cache TTL.
+     *
+     * @var mixed
+     */
+    public $ttl = '1 day';
+
+    // ...
+}
+```
+
+or as a ISO 8601 duration:
+
+```php
+<?php
+
+namespace App\Cache;
+
+class LaravelWebsite
+{
+    /**
+     * The cache TTL.
+     *
+     * @var mixed
+     */
+    public $ttl = 'P1D';
 
     // ...
 }
@@ -408,7 +450,7 @@ class LaravelWebsite
     /**
      * The cache TTL.
      *
-     * @var \DateTimeInterface|\DateInterval|int|array{ 0: \DateTimeInterface|\DateInterval|int, 1: \DateTimeInterface|\DateInterval|int }|null
+     * @var mixed
      */
     public $ttl = [3_600, 86_400];
 
@@ -761,9 +803,6 @@ class LaravelWebsite implements RepositoryAware
 }
 ```
 
-```
-
-
 ## Retrieving values
 
 The `Cache::value` method may be used to retrieve a single cache object's value. If the value is not present in the cache, the cache object's `resolve` method will be called and the resulting value will be stored in the cache and returned.
@@ -797,9 +836,182 @@ $values = Cache::values([
 ]);
 ```
 
+As seen above, each cache object may specify what store it belongs to. This means that you always call `values` directly on the `Cache` facade regardless of their configured store:
+
+```php
+<?php
+
+Cache::values([
+    LaravelWebsite::class,      // 'redis' store
+    new GitHubUsername($user),  // 'file' store
+]);
+```
+
 ## Warming the cache
 
-// TODO
+Sometimes you want to pro-actively warm the cache from a value already easily accessible that might otherwise be more expensive to compute in order to improve an anticipated future request.
+
+Imagine you cache a URL encoded representation of each user's profile image so that it does not need to be downloaded by the user or retrieved from storage.
+
+```php
+<?php
+
+namespace App\Cache;
+
+use App\Models\ProfileImage;
+use Illuminate\Support\Facades\Storage;
+
+class ProfileImage
+{
+    public $ttl = '1 day';
+
+    /**
+     * Create a new instance.
+     */
+    public function __construct(
+        private $userId,
+    ) {
+        //
+    }
+
+    /**
+     * Retrieve the cache key.
+     *
+     * @return string
+     */
+    public function key()
+    {
+        return "profile-image:{$this->userId}";
+    }
+
+    public function resolve()
+    {
+        $profileImage = ProfileImage::firstWhere('user_id', $this->userId);
+
+        $content = Storage::disk('remote')->get($profileImage->path);
+
+        return 'data:image/png;base64,'.base64_encode($content);
+    }
+}
+```
+
+To pro-actively warm this cache, you can use the `Cache::warm` method. It accepts the cache object as the first argument and the second argument is the value to store in the cache. You can see in the following example that it matches what would be returned from the `resolve` method:
+
+```php
+<?php
+
+public function update(UpdateProfileImageRequest $request)
+{
+    $request->user()->profileImage->update([
+        'path' => $request->image->store('profile-image'),
+    ]);
+
+    $valueToCache = 'data:image/png;base64,'.base64_encode($request->image->getContents());
+
+    Cache::warm(new ProfileImage($request->user()->id, $valueToCache);
+
+    return redirect("/me/");
+}
+```
+
+The value can be used on subsequent requests without having to be retrieve from storage, i.e., the cache is warm and the `resolve` method is not called:
+
+```blade
+<img src="{{ Cache::value(new ProfileImage(Auth::id())) }}" />
+```
+
+It is also possible to dehydrate a rich object in the cache object itself. To do this, create a `dehydrate` method. This method will receive the second argument passed to the `Cache::warm` method:
+
+```php
+<?php
+
+namespace App\Cache;
+
+use App\Models\ProfileImage;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
+
+class ProfileImage
+{
+    public $ttl = '1 day';
+
+    /**
+     * Create a new instance.
+     */
+    public function __construct(
+        private $userId,
+    ) {
+        //
+    }
+
+    /**
+     * Retrieve the cache key.
+     *
+     * @return string
+     */
+    public function key()
+    {
+        return "profile-image:{$this->userId}";
+    }
+
+    public function resolve()
+    {
+        $profileImage = ProfileImage::firstWhere('user_id', $this->userId);
+
+        $content = Storage::disk('remote')->get($profileImage->path);
+
+        return 'data:image/png;base64,'.base64_encode($content);
+    }
+
+    public function dehydrate(UploadedFile $file)
+    {
+        return 'data:image/png;base64,'.base64_encode($file->getContents());
+    }
+}
+```
+
+The `Cache::warm` method may now accept the uploaded file,  which will be passed to the `dehydrate` method. The value returned from the `dehydrate` method will be the value stored in the cache:
+
+```php
+<?php
+
+public function update(UpdateProfileImageRequest $request)
+{
+    $request->user()->profileImage->update([
+        'path' => $request->image->store('profile-image'),
+    ]);
+
+    Cache::warm(new ProfileImage($request->user()->id, $request->image);
+
+    return redirect("/me/");
+}
+```
+
+The hydrate method may accept multiple different values. For example, it could support both the string and the `UploadedFile`:
+
+```php
+<?php
+
+namespace App\Cache;
+
+use App\Models\ProfileImage;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
+
+class ProfileImage
+{
+    // ...
+
+    public function dehydrate(string|UploadedFile $file)
+    {
+        if (is_string($file)) {
+            return $file;
+        }
+
+        return 'data:image/png;base64,'.base64_encode($file->getContents());
+    }
+}
+```
 
 ## Warming via the scheduler
 
@@ -808,3 +1020,4 @@ $values = Cache::values([
 - [ ] Retrieving many values.
 - [ ] Casting ints to string?
 - [ ] You cannot specify the store when retrieving values. You may retrieve across stores.
+- [ ] Other examples, e.g., Eloquent caching
