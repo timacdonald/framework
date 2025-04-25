@@ -19,6 +19,7 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Redis;
+use Illuminate\Support\Facades\Schedule;
 use Orchestra\Testbench\TestCase;
 use ReflectionClass;
 use ReflectionFunction;
@@ -293,6 +294,10 @@ class CacheObjectTest extends TestCase
                 });
 
             return true;
+        });
+
+        Schedule::macro('warm', function ($cacheables) {
+            return Schedule::call(fn () => Cache::warm(collect($cacheables)->map(fn ($value) => value($value))));
         });
     }
 
@@ -1499,9 +1504,66 @@ class CacheObjectTest extends TestCase
 
     public function test_it_can_control_warm_schedule()
     {
-        // should it specify the warm in the class itself?
-        // what happens when an object has recently manually been warmed?
-        $this->markTestIncomplete();
+        $object = new class
+        {
+            public $key = 'name';
+
+            public $resolved = 0;
+
+            public function resolve()
+            {
+                $this->resolved++;
+
+                return 'Taylor';
+            }
+        };
+        Schedule::warm([$object])->everyFiveMinutes();
+
+        $this->travelTo(now()->floorMinutes(5)->subSeconds(1));
+        $this->artisan('schedule:run')->assertExitCode(0);
+
+        $valueInCache = Cache::get('name');
+        $this->assertNull($valueInCache);
+        $this->assertSame(0, $object->resolved);
+
+        $this->travelTo(now()->floorMinutes(5));
+        $this->artisan('schedule:run')->assertExitCode(0);
+
+        $valueInCache = Cache::get('name');
+        $this->assertSame('Taylor', $valueInCache);
+        $this->assertSame(1, $object->resolved);
+    }
+
+    public function test_it_can_pass_closures_to_schedule_warm()
+    {
+        $object = new class
+        {
+            public $key = 'name';
+
+            public $resolved = 0;
+
+            public function resolve()
+            {
+                $this->resolved++;
+
+                return 'Taylor';
+            }
+        };
+        Schedule::warm([fn () => $object])->everyFiveMinutes();
+
+        $this->travelTo(now()->floorMinutes(5)->subSeconds(1));
+        $this->artisan('schedule:run')->assertExitCode(0);
+
+        $valueInCache = Cache::get('name');
+        $this->assertNull($valueInCache);
+        $this->assertSame(0, $object->resolved);
+
+        $this->travelTo(now()->floorMinutes(5));
+        $this->artisan('schedule:run')->assertExitCode(0);
+
+        $valueInCache = Cache::get('name');
+        $this->assertSame('Taylor', $valueInCache);
+        $this->assertSame(1, $object->resolved);
     }
 
     public function test_it_can_be_nicely_tied_into_eloquent_events_to_stay_up_to_date()
