@@ -15,7 +15,8 @@ I often find myself duplicating cache interactions throughout a code base.
 
 $username = Cache::remember("github-username:{$user->github_id}", now()->addHours(24), function () use ($user) {
     return Http::withToken($user->github_token)
-        ->get('https://github.com/api/...');
+        ->get('https://github.com/api/...')
+        ->json('data.username');
 });
 
 // somewhere else in the code base...
@@ -23,7 +24,8 @@ $username = Cache::remember("github-username:{$user->github_id}", now()->addHour
 $username = Cache::remember("github-username:{$user->github_id}", now()->addHour(), function () use ($user) {
     return Http::withToken($user->github_token)
         ->get('https://github.com/api/...')
-        ->throw();
+        ->throw()
+        ->json('data.username');
 });
 ```
 
@@ -43,7 +45,8 @@ class GitHubUsername
     {
         return Http::withToken($this->user->github_token)
             ->get('https://github.com/api/...')
-            ->throw();
+            ->throw()
+            ->json('data.username');
     }
 }
 
@@ -89,7 +92,8 @@ class GitHubUsername
     {
         return Http::withToken($this->user->github_token)
             ->get('https://github.com/api/...')
-            ->throw();
+            ->throw()
+            ->json('data.username');
     }
 }
 
@@ -140,7 +144,8 @@ class GitHubUsername
     {
         return Http::withToken($this->user->github_token)
             ->get('https://github.com/api/...')
-            ->throw();
+            ->throw()
+            ->json('data.username');
     }
 }
 
@@ -193,7 +198,8 @@ class GitHubUsername
     {
         return Http::withToken($this->user->github_token)
             ->get('https://github.com/api/...')
-            ->throw();
+            ->throw()
+            ->json('data.username');
     }
 }
 
@@ -216,3 +222,72 @@ Schedule::warm([
     fn () => User::highTraffic()->get()->mapInto(GithubUsername::class);
 ])->everyHour();
 ```
+
+## Cache Objects
+
+The follow expresses the basics of a cache object: a cache key and a `resolve` method.
+
+```php
+<?php
+
+namespace App\Cache;
+
+class LaravelWebsite
+{
+    /**
+     * The cache key.
+     *
+     * @var string
+     */
+    public $key = 'laravel-website';
+
+    /**
+     * Resolve the value to store in the cache.
+     *
+     * @return mixed
+     */
+    public function resolve()
+    {
+        return Http::get('https://laravel.com')
+            ->throw()
+            ->body();
+    }
+}
+
+$html = Cache::value(new LaravelWebsite);
+```
+
+The `resolve` method is called by the container allowing method injection:
+
+```php
+<?php
+
+namespace App\Cache;
+
+use Illuminate\Http\Client\Factory;
+
+class LaravelWebsite
+{
+    /**
+     * The cache key.
+     *
+     * @var string
+     */
+    public $key = 'laravel-website';
+
+    /**
+     * Resolve the value to store in the cache.
+     *
+     * @return mixed
+     */
+    public function resolve(Factory $http)
+    {
+        return $http->get('https://laravel.com')
+            ->throw()
+            ->body();
+    }
+}
+```
+
+- [ ] Method injection
+- [ ] Casting ints to string?
