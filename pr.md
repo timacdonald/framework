@@ -254,6 +254,8 @@ class LaravelWebsite
     }
 }
 
+// --- //
+
 $html = Cache::value(new LaravelWebsite);
 ```
 
@@ -437,11 +439,37 @@ class LaravelWebsite
     }
 }
 
+// --- //
+
 $htmlString = Cache::value(LaravelWebsite::class);
 
 assert($htmlString instanceof HtmlString);
-
 assert($htmlString->toHtml() === Cache::get('laravel-website'));
+```
+
+The `hydrate` method is called by the container allowing method injection. The first parameter will always be the cached value:
+
+```php
+<?php
+
+namespace App\Cache;
+
+use App\Factories\HtmlStringFactory;
+
+class LaravelWebsite
+{
+    // ...
+
+    /**
+     * Hydrate the raw cached value.
+     *
+     * @return mixed
+     */
+    public function hydrate($html, HtmlStringFactory $factory)
+    {
+        return $factory->make($html);
+    }
+}
 ```
 
 ## Retrieving values
