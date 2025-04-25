@@ -1066,4 +1066,5 @@ Schedule::warm([
 ])->everyFiveMinutes();
 ```
 
-> [!NOTE] I'm considering wrapping up how often the cache value wants to be warmed into the cache object itself. That means you would not call `everyFiveMinutes` as each object would know when it was last warmed and how often it should be warmed. Not sure on that yet.
+> [!NOTE]
+> I'm considering wrapping up how often the cache value wants to be warmed into the cache object itself. That means you would not call `everyFiveMinutes` as each object would know when it was last warmed and how often it should be warmed. Not sure on that yet.
