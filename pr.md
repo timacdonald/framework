@@ -472,6 +472,56 @@ class LaravelWebsite
 }
 ```
 
+### Configuring the store
+
+The cache objects own the store they belong to. They use the default store when none is specified.
+
+You may specify a store via the `$store` property:
+
+```php
+<?php
+
+namespace App\Cache;
+
+class LaravelWebsite
+{
+    /**
+     * The cache store.
+     *
+     * @var string|null
+     */
+    public $store = 'redis';
+
+    // ...
+}
+```
+
+You may also specify the store via a `store` method:
+
+```php
+<?php
+
+namespace App\Cache;
+
+class LaravelWebsite
+{
+    /**
+     * Retrieve the cache store.
+     *
+     * @return string|null
+     */
+    public function store()
+    {
+        return 'redis';
+    }
+
+    // ...
+}
+```
+
+The `store` method will be called via the container allowing method injection.
+
+
 ## Retrieving values
 
 The `Cache::value` method may be used to retrieve a single cache object's value. If the value is not present in the cache, the cache object's `resolve` method will be called and the resulting value will be stored in the cache and returned.
@@ -515,4 +565,5 @@ $values = Cache::values([
 
 - [ ] Retrieving many values.
 - [ ] Casting ints to string?
+- [ ] You cannot specify the store when retrieving values.
 

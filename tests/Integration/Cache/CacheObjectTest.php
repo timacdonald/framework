@@ -1588,6 +1588,11 @@ class CacheObjectTest extends TestCase
 
         $this->assertValue('Taylor', $name);
     }
+
+    public function test_it_can_fake_the_cache_store_for_tests()
+    {
+        $this->markTestIncomplete('TODO');
+    }
 }
 
 class MyTestService
