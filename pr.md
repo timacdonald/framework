@@ -338,7 +338,7 @@ class LaravelWebsite
     /**
      * The cache TTL.
      *
-     * @var \DateTimeInterface|\DateInterval|int|null
+     * @var \DateTimeInterface|\DateInterval|int|array{0: int, 1: int}|null
      */
     public $ttl = 3_600;
 
@@ -358,7 +358,7 @@ class LaravelWebsite
     /**
      * Retrieve the cache TTL.
      *
-     * @return \DateTimeInterface|\DateInterval|int|null
+     * @return \DateTimeInterface|\DateInterval|int|array{0: int, 1: int}|null
      */
     public function ttl()
     {
@@ -472,6 +472,10 @@ class LaravelWebsite
 }
 ```
 
+### Memoizing values
+
+Similar to the recently introduced `Cache::memo`
+
 ### Configuring the store
 
 The cache objects own the store they belong to. They use the default store when none is specified.
@@ -521,6 +525,51 @@ class LaravelWebsite
 
 The `store` method will be called via the container allowing method injection.
 
+### Accessing the repository
+
+If you would like to have access to the repository class within your cache object, you may implement the `RepositoryAware` contract:
+
+```php
+```php
+<?php
+
+namespace App\Cache;
+
+use Illuminate\Contracts\Cache\Repository;
+use Illuminate\Contracts\Cache\RepositoryAware;
+
+class LaravelWebsite implements RepositoryAware
+{
+    /**
+     * The cache store.
+     *
+     * @var string|null
+     */
+    public $store = 'redis';
+
+    /**
+     * The cache repository.
+     *
+     * @var \Illuminate\Contracts\Cache\Repository
+     */
+    protected $repository;
+
+    /**
+     * Set the cache repository.
+     *
+     * @return void
+     */
+    public function setRepository(Repository $repository)
+    {
+        $this->repository = $repository;
+    }
+
+    // ...
+}
+```
+
+```
+
 
 ## Retrieving values
 
@@ -565,5 +614,4 @@ $values = Cache::values([
 
 - [ ] Retrieving many values.
 - [ ] Casting ints to string?
-- [ ] You cannot specify the store when retrieving values.
-
+- [ ] You cannot specify the store when retrieving values. You may retrieve across stores.
