@@ -338,7 +338,7 @@ class LaravelWebsite
     /**
      * The cache TTL.
      *
-     * @var \DateTimeInterface|\DateInterval|int|array{0: int, 1: int}|null
+     * @var \DateTimeInterface|\DateInterval|int|array{ 0: \DateTimeInterface|\DateInterval|int, 1: \DateTimeInterface|\DateInterval|int }|null
      */
     public $ttl = 3_600;
 
@@ -358,7 +358,7 @@ class LaravelWebsite
     /**
      * Retrieve the cache TTL.
      *
-     * @return \DateTimeInterface|\DateInterval|int|array{0: int, 1: int}|null
+     * @return \DateTimeInterface|\DateInterval|int|array{ 0: \DateTimeInterface|\DateInterval|int, 1: \DateTimeInterface|\DateInterval|int }|null
      */
     public function ttl()
     {
@@ -383,12 +383,34 @@ class LaravelWebsite
     /**
      * Retrieve the cache TTL.
      *
-     * @return \DateTimeInterface|\DateInterval|int|null
+     * @return \DateTimeInterface|\DateInterval|int|array{ 0: \DateTimeInterface|\DateInterval|int, 1: \DateTimeInterface|\DateInterval|int }|null
      */
     public function ttl(Clock $clock)
     {
         return $clock->now()->addHour();
     }
+
+    // ...
+}
+```
+
+### Flexible (stale while revalidate)
+
+It is possible to use the `Cache::flexible` feature with cache objects by using a tuple as the TTL:
+
+```php
+<?php
+
+namespace App\Cache;
+
+class LaravelWebsite
+{
+    /**
+     * The cache TTL.
+     *
+     * @var \DateTimeInterface|\DateInterval|int|array{ 0: \DateTimeInterface|\DateInterval|int, 1: \DateTimeInterface|\DateInterval|int }|null
+     */
+    public $ttl = [3_600, 86_400];
 
     // ...
 }
@@ -474,7 +496,42 @@ class LaravelWebsite
 
 ### Memoizing values
 
-Similar to the recently introduced `Cache::memo`
+Similar to the recently introduced `Cache::memo` feature, cache objects can also have their values memoized to  ensure they are only retrieved from the cache once per request, job, or command.
+
+```php
+<?php
+
+namespace App\Cache;
+
+use Illuminate\Cache\Attributes\Memoize;
+
+#[Memoize]
+class LaravelWebsite
+{
+    /**
+     * The cache key.
+     *
+     * @var string
+     */
+    public $key = 'laravel-website';
+
+    /**
+     * Resolve the value to store in the cache.
+     *
+     * @return mixed
+     */
+    public function resolve()
+    {
+        return Http::get('https://laravel.com')
+            ->throw()
+            ->body();
+    }
+}
+
+$html = Cache::value(new LaravelWebsite); // Hits the cache
+$html = Cache::value(new LaravelWebsite); // Does not hit the cache
+$html = Cache::value(new LaravelWebsite); // Does not hit the cache
+```
 
 ### Configuring the store
 
