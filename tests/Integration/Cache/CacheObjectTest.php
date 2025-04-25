@@ -148,6 +148,7 @@ class CacheObjectTest extends TestCase
                         ->flatMap(function ($ttlGroup, $ttl) use ($store, $memo, $flexibleTtlMap, $memoized, $cached, $flexiblelyCached) {
                             $ttlGroup = $ttlGroup->except([
                                 ...$memoized->keys(),
+                                // TODO I don't think flexibely cached can end up here
                                 ...$flexiblelyCached->keys(),
                                 ...$cached->keys(),
                             ]);
@@ -191,29 +192,90 @@ class CacheObjectTest extends TestCase
 
             return $results;
         });
+        Cache::macro('warm', function ($cacheable, $value = null) use ($resolveKey, $resolveTtl, $resolveStore, $hydrate, $memo) {
+            $result = true;
+            $cacheables = Collection::wrap($cacheable);
 
-        Cache::macro('warm', function ($cacheable, $value = null) {
-            $value = func_num_args() === 1
-                ? app()->call($cacheable->resolve(...))
-                : $value;
+            $storeMappedResults = $cacheables
+                ->groupBy(function ($cacheable) use ($resolveStore) {
+                    $store = $resolveStore($cacheable);
 
-            $key = method_exists($cacheable, 'key')
-                ? app()->call($cacheable->key(...))
-                : $cacheable->key ?? null;
+                    if ($store  === null) {
+                        $store = Cache::getDefaultDriver();
+                    }
 
-            if ($key === null) {
-                throw new RuntimeException('Cache object must have a key defined');
-            }
+                    if ($cacheable instanceof RepositoryAware) {
+                        $cacheable->setRepository(Cache::store($store));
+                    }
 
+                    return $store;
+                })
+                ->map(function ($cacheables, $store) use ($resolveKey, $resolveTtl, $hydrate, $memo) {
+                    $keyMap = $cacheables
+                        ->mapWithKeys(function ($cacheable) use ($resolveKey, $store) {
+                            $key = (string) $resolveKey($cacheable);
 
-//                 ? app()->call($cacheable->ttl(...))
-//                 : $cacheable->ttl ?? null;
+                            if ($key === '') {
+                                throw new RuntimeException('Cache object must have a key defined');
+                            }
 
-//             if (method_exists($cacheable, 'dehydrate')) {
-//                 $value = app()->call($cacheable->dehydrate(...), ['value' => $value]);
-//             }
+                            return [$key => $cacheable];
+                        });
 
-//             return $this->put($key, $value, $ttl);
+                    if ($memo->has($store)) {
+                        $keyMap->each(function ($_, $key) use (&$memo, $store) {
+                            unset($memo[$store][$key]);
+                        });
+                    }
+
+                    $flexibleTtlMap = new WeakMap;
+
+                    $ttlGrouped = $keyMap
+                        ->groupBy(function ($cacheable) use ($resolveTtl, $flexibleTtlMap) {
+                            $ttl = $resolveTtl($cacheable);
+
+                            if (is_array($ttl)) {
+                                $flexibleTtlMap[$cacheable] = $ttl;
+
+                                return 'flexible';
+                            }
+
+                            return $ttl;
+                        }, preserveKeys: true);
+
+                    [$flexible, $ttlGrouped] = [
+                        $ttlGrouped->get('flexible', collect()),
+                        $ttlGrouped->except('flexible'),
+                    ];
+
+                    // TODO capture result
+                    $flexible->map(function ($cacheable, $key) use ($store, $flexibleTtlMap) {
+                        Cache::store($store)->forget($key);
+
+                        return Cache::store($store)
+                            ->flexible($key, $flexibleTtlMap[$cacheable], app()->wrap($cacheable->resolve(...)));
+                    });
+
+                    $ttlGrouped
+                        ->flatMap(function ($ttlGroup, $ttl) use ($store, $memo, $flexibleTtlMap, $flexible) {
+                            $ttl = $ttl === '' ? null : $ttl;
+
+                            $values = $ttlGroup
+                                ->map(fn ($cacheable, $key) => app()->call($cacheable->resolve(...)));
+
+                            if ($values->containsOneItem()) {
+                                Cache::store($store)->put($values->keys()->first(), $values->first(), $ttl);
+                            } else {
+                                Cache::store($store)->putMany($values->all(), $ttl);
+                            }
+
+                            return $values;
+                        });
+
+                    return true;
+                });
+
+            return true;
         });
     }
 
@@ -1181,6 +1243,61 @@ class CacheObjectTest extends TestCase
 
         $this->assertSame('Resolved: '.now()->subSeconds(10)->getTimestamp().' Hydrated: '.now()->subSeconds(10)->getTimestamp(), $firstValue);
         $this->assertSame('Resolved: '.now()->subSeconds(10)->getTimestamp().' Hydrated: '.now()->subSeconds(5)->getTimestamp(), $secondValue);
+    }
+
+    public function test_it_can_be_warmed()
+    {
+        $object = new class
+        {
+            public $key = 'name';
+
+            public function resolve()
+            {
+                return 'Taylor';
+            }
+
+            public function hydrate($value)
+            {
+                throw new RuntimeException(__FUNCTION__);
+            }
+        };
+
+        $result = Cache::warm($object);
+        $valueInCache = Cache::get('name');
+
+        $this->assertSame('Taylor', $valueInCache);
+        $this->assertTrue($result);
+    }
+
+    public function test_it_can_warm_multiple_instances()
+    {
+        $factory = fn ($key, $value) => new class($key, $value)
+        {
+            public function __construct(
+                public $key,
+                public $value,
+            ) {
+                //
+            }
+            public function resolve()
+            {
+                return $this->value;
+            }
+
+            public function hydrate($value)
+            {
+                throw new RuntimeException(__FUNCTION__);
+            }
+        };
+
+        $result = Cache::warm([
+            $factory('name.0', 'Taylor'),
+            $factory('name.1', 'Otwell'),
+        ]);
+        $valuesInCache = Cache::many(['name.0', 'name.1']);
+
+        $this->assertSame(['name.0' => 'Taylor', 'name.1' => 'Otwell'], $valuesInCache);
+        $this->assertTrue($result);
     }
 
     public function test_it_can_warm_the_cache_with_in_memory_value()
