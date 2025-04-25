@@ -1580,6 +1580,14 @@ class CacheObjectTest extends TestCase
     {
         $this->markTestIncomplete('Dunno about this');
     }
+
+    public function test_it_can_have_the_container_new_up_the_class()
+    {
+        $this->markTestIncomplete('TODO');
+        $name = Cache::value(Name::class);
+
+        $this->assertValue('Taylor', $name);
+    }
 }
 
 class MyTestService

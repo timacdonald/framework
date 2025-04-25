@@ -322,7 +322,9 @@ The `key` method is also called by the container allowing method injection.
 
 ### TTL
 
-When a TTL is not specified, the value will be cached forever. A TTL may be specified via a public `$ttl` property:
+Without a TTL is not specified, the value will be cached forever.
+
+A TTL may be specified via a public `$ttl` property:
 
 ```php
 <?php
@@ -389,5 +391,100 @@ class LaravelWebsite
     // ...
 }
 ```
+
+### Hydrating values
+
+Often, you want to store a raw value in the cache but have a rich value returned. The `hydrate` method allows you intercept the value coming from the cache and make alterations to the returned value.
+
+In the following example, the raw HTML will be stored in the cache. When the cache object value is retrieved, a `HtmlString` instance will be returned.
+
+```php
+<?php
+
+namespace App\Cache;
+
+use Illuminate\Support\HtmlString;
+
+class LaravelWebsite
+{
+    /**
+     * The cache key.
+     *
+     * @var string
+     */
+    public $key = 'laravel-website';
+
+    /**
+     * Resolve the value to store in the cache.
+     *
+     * @return mixed
+     */
+    public function resolve(Factory $http)
+    {
+        return $http->get('https://laravel.com')
+            ->throw()
+            ->body();
+    }
+
+    /**
+     * Hydrate the raw cached value.
+     *
+     * @return mixed
+     */
+    public function hydrate($html)
+    {
+        return new HtmlString($html);
+    }
+}
+
+$htmlString = Cache::value(LaravelWebsite::class);
+
+assert($htmlString instanceof HtmlString);
+
+assert($htmlString->toHtml() === Cache::get('laravel-website'));
+```
+
+## Retrieving values
+
+The `Cache::value` method may be used to retrieve a single cache object's value. If the value is not present in the cache, the cache object's `resolve` method will be called and the resulting value will be stored in the cache and returned.
+
+```php
+<?php
+
+$html = Cache::value(new LaravelWebsite);
+
+$username = Cache::value(new GitHubUsername($user));
+```
+
+If the class does not expect any values in the constructor or if the constructor is expecting services that may be provided by the container, you may pass the class string without having to instantiate the object. The container will make the object under the hood:
+
+```php
+<?php
+
+$html = Cache::value(LaravelWebsite::class);
+```
+
+If you would like to retrieve multiple values at one time, you may use the `Cache::values` method:
+
+```php
+<?php
+
+/** @var list<string> $values */
+
+$values = Cache::values([
+    LaravelWebsite::class,
+    new GitHubUsername($user),
+]);
+```
+
+## Warming the cache
+
+// TODO
+
+## Warming via the scheduler
+
+// TODO
+
+- [ ] Retrieving many values.
 - [ ] Casting ints to string?
 
