@@ -71,6 +71,20 @@ class CacheObjectTest extends TestCase
             return app()->call($cacheable->hydrate(...), [$parameters[0]->getName() => $value]);
         };
 
+        $dehydrate = function ($cacheable, $value) {
+            if (! method_exists($cacheable, 'dehydrate')) {
+                return $value;
+            }
+
+            $parameters = (new ReflectionMethod($cacheable, 'dehydrate'))->getParameters();
+
+            if ($parameters === []) {
+                return $cacheable->dehydrate($value);
+            }
+
+            return app()->call($cacheable->dehydrate(...), [$parameters[0]->getName() => $value]);
+        };
+
         $memo = collect([]);
         Cache::macro('value', fn ($cacheable) => Cache::values([$cacheable])[0]);
 
@@ -192,7 +206,7 @@ class CacheObjectTest extends TestCase
 
             return $results;
         });
-        Cache::macro('warm', function ($cacheable, $value = null) use ($resolveKey, $resolveTtl, $resolveStore, $hydrate, $memo) {
+        Cache::macro('warm', function ($cacheable, $value = null) use ($resolveKey, $resolveTtl, $resolveStore, $memo, $dehydrate) {
             $result = true;
             $cacheables = Collection::wrap($cacheable);
 
@@ -210,7 +224,7 @@ class CacheObjectTest extends TestCase
 
                     return $store;
                 })
-                ->map(function ($cacheables, $store) use ($resolveKey, $resolveTtl, $hydrate, $memo) {
+                ->map(function ($cacheables, $store) use ($resolveKey, $resolveTtl, $memo, $value, $dehydrate) {
                     $keyMap = $cacheables
                         ->mapWithKeys(function ($cacheable) use ($resolveKey, $store) {
                             $key = (string) $resolveKey($cacheable);
@@ -231,7 +245,7 @@ class CacheObjectTest extends TestCase
                     $flexibleTtlMap = new WeakMap;
 
                     $ttlGrouped = $keyMap
-                        ->groupBy(function ($cacheable) use ($resolveTtl, $flexibleTtlMap) {
+                        ->groupBy(function ($cacheable) use ($resolveTtl, $flexibleTtlMap, $value, $dehydrate) {
                             $ttl = $resolveTtl($cacheable);
 
                             if (is_array($ttl)) {
@@ -249,19 +263,22 @@ class CacheObjectTest extends TestCase
                     ];
 
                     // TODO capture result
-                    $flexible->map(function ($cacheable, $key) use ($store, $flexibleTtlMap) {
+                    $flexible->map(function ($cacheable, $key) use ($store, $flexibleTtlMap, $value, $dehydrate) {
                         Cache::store($store)->forget($key);
 
-                        return Cache::store($store)
-                            ->flexible($key, $flexibleTtlMap[$cacheable], app()->wrap($cacheable->resolve(...)));
+                        $callback = fn () => $value === null
+                            ? $dehydrate($cacheable, app()->call($cacheable->resolve(...)))
+                            : $dehydrate($cacheable, $value);
+
+                        return Cache::store($store)->flexible($key, $flexibleTtlMap[$cacheable], $callback);
                     });
 
                     $ttlGrouped
-                        ->flatMap(function ($ttlGroup, $ttl) use ($store, $memo, $flexibleTtlMap, $flexible) {
+                        ->flatMap(function ($ttlGroup, $ttl) use ($store, $memo, $flexibleTtlMap, $flexible, $value, $dehydrate) {
                             $ttl = $ttl === '' ? null : $ttl;
 
                             $values = $ttlGroup
-                                ->map(fn ($cacheable, $key) => app()->call($cacheable->resolve(...)));
+                                ->map(fn ($cacheable, $key) => $dehydrate($cacheable, $value ?? app()->call($cacheable->resolve(...))));
 
                             if ($values->containsOneItem()) {
                                 Cache::store($store)->put($values->keys()->first(), $values->first(), $ttl);
@@ -1279,6 +1296,7 @@ class CacheObjectTest extends TestCase
             ) {
                 //
             }
+
             public function resolve()
             {
                 return $this->value;
@@ -1449,6 +1467,13 @@ class CacheObjectTest extends TestCase
 
     public function test_warming_flushes_memoized_value()
     {
+        $this->markTestIncomplete();
+    }
+
+    public function test_it_can_control_warm_schedule()
+    {
+        // should it specify the warm in the class itself?
+        // what happens when an object has recently manually been warmed?
         $this->markTestIncomplete();
     }
 
