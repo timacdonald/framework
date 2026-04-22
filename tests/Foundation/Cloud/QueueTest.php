@@ -35,7 +35,7 @@ class SqsQueueTest extends TestCase
             '_cloud_event' => 'queue',
             'timestamp' => '2000-01-02 03:04:05.060708',
             'type' => 'started',
-            'queue' => null,
+            'queue' => '',
         ]], $eventsFake->emitted);
     }
 
@@ -56,13 +56,13 @@ class SqsQueueTest extends TestCase
                 '_cloud_event' => 'queue',
                 'timestamp' => '2000-01-02 03:04:05.060708',
                 'type' => 'started',
-                'queue' => null,
+                'queue' => '',
             ],
             [
                 '_cloud_event' => 'queue',
                 'timestamp' => '2000-01-02 03:04:06.060708',
                 'type' => 'processed',
-                'queue' => null,
+                'queue' => '',
             ],
         ], $eventsFake->emitted);
     }
@@ -139,13 +139,13 @@ class SqsQueueTest extends TestCase
                 '_cloud_event' => 'queue',
                 'timestamp' => '2000-01-02 03:04:05.060708',
                 'type' => 'started',
-                'queue' => null,
+                'queue' => '',
             ],
             [
                 '_cloud_event' => 'queue',
                 'timestamp' => '2000-01-02 03:04:05.060708',
                 'type' => 'failed',
-                'queue' => null,
+                'queue' => '',
             ]
         ], $eventsFake->emitted);
     }
@@ -167,13 +167,13 @@ class SqsQueueTest extends TestCase
                 '_cloud_event' => 'queue',
                 'timestamp' => '2000-01-02 03:04:05.060708',
                 'type' => 'started',
-                'queue' => null,
+                'queue' => '',
             ],
             [
                 '_cloud_event' => 'queue',
                 'timestamp' => '2000-01-02 03:04:05.060708',
                 'type' => 'released',
-                'queue' => null,
+                'queue' => '',
             ]
         ], $eventsFake->emitted);
     }

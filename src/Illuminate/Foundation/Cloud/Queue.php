@@ -21,6 +21,11 @@ class Queue implements QueueContract
      */
     protected $processingQueue;
 
+    /**
+     * @var list<string>
+     */
+    protected $queueCache = [];
+
     public function __construct(
         protected QueueContract $queue,
         protected Events $events,
@@ -276,7 +281,7 @@ class Queue implements QueueContract
             '_cloud_event' => 'queue',
             'timestamp' => now()->toDateTimeString('microsecond'),
             'type' => 'queued',
-            'queue' => $queue, // TODO will the queue be `null`? Do we need to run through a `getQueue` to normalize to a URL and then parse queue like we do in Pulse / Nightwatch?
+            'queue' => $this->resolveQueue($queue),
         ]));
     }
 
@@ -318,15 +323,36 @@ class Queue implements QueueContract
             return;
         }
 
-        $this->processingQueue = $queue;
         $this->processingJob = $job;
+        $this->processingQueue = $this->resolveQueue($queue);
 
         $this->events->emit([
             '_cloud_event' => 'queue',
             'timestamp' => now()->toDateTimeString('microsecond'),
             'type' => 'started',
-            'queue' => $queue, // TODO will the queue be `null`? Do we need to run through a `getQueue` to normalize to a URL and then parse queue like we do in Pulse / Nightwatch?
+            'queue' => $this->processingQueue,
         ]);
+    }
+
+    /**
+     * Resolve the queue name.
+     *
+     * @param  string|null  $queue
+     * @return string
+     */
+    protected function resolveQueue($queue)
+    {
+        $queue ??= '';
+
+        if (array_key_exists($queue, $this->queueCache)) {
+            return $this->queueCache[$queue];
+        }
+
+        if (method_exists($this->queue, 'getQueue')) {
+            $queue = $this->queue->getQueue($queue);
+        }
+
+        return $this->queueCache[$queue] = $queue;
     }
 
     /**
