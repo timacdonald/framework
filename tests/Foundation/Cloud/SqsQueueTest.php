@@ -2,7 +2,7 @@
 
 namespace Tests\Tests\Foundation;
 
-use Illuminate\Foundation\Cloud\EventLogger;
+use Illuminate\Foundation\Cloud\Events;
 use Illuminate\Foundation\Cloud\Queue;
 use Illuminate\Queue\Jobs\FakeJob;
 use Illuminate\Support\Testing\Fakes\QueueFake;
@@ -12,21 +12,21 @@ class SqsQueueTest extends TestCase
 {
     public function testItDoesNotEmitEventsWhilePoppingWhenNoJobsAreProcessingAndNoJobsAreAvailableToPop()
     {
-        $eventLoggerFake = $this->fakeEventLogger();
+        $eventsFake = $this->fakeEvents();
         $queueFake = new QueueFake($this->app, [], null);
-        $queue = new Queue($queueFake, $eventLoggerFake);
+        $queue = new Queue($queueFake, $eventsFake);
 
         $queue->pop();
 
-        $this->assertSame([], $eventLoggerFake->emitted);
+        $this->assertSame([], $eventsFake->emitted);
     }
 
     public function testItEmitsStartedEventWhenJobIsSuccessfullyPopped()
     {
         $this->travelTo('2000-01-02 03:04:05.060708');
-        $eventLoggerFake = $this->fakeEventLogger();
+        $eventsFake = $this->fakeEvents();
         $queueFake = $this->fakeQueue();
-        $queue = new Queue($queueFake, $eventLoggerFake);
+        $queue = new Queue($queueFake, $eventsFake);
 
         $queueFake->jobsToPop[] = new FakeJob;
         $queue->pop();
@@ -36,15 +36,15 @@ class SqsQueueTest extends TestCase
             'timestamp' => '2000-01-02 03:04:05.060708',
             'type' => 'started',
             'queue' => null,
-        ]], $eventLoggerFake->emitted);
+        ]], $eventsFake->emitted);
     }
 
     public function testItEmitsProcessedEventWhenNextJobIsAboutToPop()
     {
         $this->travelTo('2000-01-02 03:04:05.060708');
-        $eventLoggerFake = $this->fakeEventLogger();
+        $eventsFake = $this->fakeEvents();
         $queueFake = $this->fakeQueue();
-        $queue = new Queue($queueFake, $eventLoggerFake);
+        $queue = new Queue($queueFake, $eventsFake);
 
         $queueFake->jobsToPop[] = new FakeJob;
         $queue->pop();
@@ -64,15 +64,15 @@ class SqsQueueTest extends TestCase
                 'type' => 'processed',
                 'queue' => null,
             ],
-        ], $eventLoggerFake->emitted);
+        ], $eventsFake->emitted);
     }
 
     public function testItDoesNotEmitEventsForTheSameJobAfterItHasBeenProcessed()
     {
         $this->travelTo('2000-01-02 03:04:05.060708');
-        $eventLoggerFake = $this->fakeEventLogger();
+        $eventsFake = $this->fakeEvents();
         $queueFake = $this->fakeQueue();
-        $queue = new Queue($queueFake, $eventLoggerFake);
+        $queue = new Queue($queueFake, $eventsFake);
 
         $queueFake->jobsToPop[] = new FakeJob;
         $queue->pop();
@@ -80,15 +80,15 @@ class SqsQueueTest extends TestCase
         $queue->pop();
         $queue->pop();
 
-        $this->assertCount(2, $eventLoggerFake->emitted);
+        $this->assertCount(2, $eventsFake->emitted);
     }
 
     public function testItRemembersTheQueueForTheProcessedEvent()
     {
         $this->travelTo('2000-01-02 03:04:05.060708');
-        $eventLoggerFake = $this->fakeEventLogger();
+        $eventsFake = $this->fakeEvents();
         $queueFake = $this->fakeQueue();
-        $queue = new Queue($queueFake, $eventLoggerFake);
+        $queue = new Queue($queueFake, $eventsFake);
 
         $queueFake->jobsToPop = [new FakeJob, new FakeJob];
         $queue->pop('first');
@@ -119,15 +119,15 @@ class SqsQueueTest extends TestCase
                 'type' => 'processed',
                 'queue' => 'second',
             ]
-        ], $eventLoggerFake->emitted);
+        ], $eventsFake->emitted);
     }
 
     public function testItEmitsFailedJobEvents()
     {
         $this->travelTo('2000-01-02 03:04:05.060708');
-        $eventLoggerFake = $this->fakeEventLogger();
+        $eventsFake = $this->fakeEvents();
         $queueFake = $this->fakeQueue();
-        $queue = new Queue($queueFake, $eventLoggerFake);
+        $queue = new Queue($queueFake, $eventsFake);
 
         $queueFake->jobsToPop[] = $jobFake = new FakeJob;
         $queue->pop();
@@ -147,15 +147,15 @@ class SqsQueueTest extends TestCase
                 'type' => 'failed',
                 'queue' => null,
             ]
-        ], $eventLoggerFake->emitted);
+        ], $eventsFake->emitted);
     }
 
     public function testItEmitsReleasedJobEvents()
     {
         $this->travelTo('2000-01-02 03:04:05.060708');
-        $eventLoggerFake = $this->fakeEventLogger();
+        $eventsFake = $this->fakeEvents();
         $queueFake = $this->fakeQueue();
-        $queue = new Queue($queueFake, $eventLoggerFake);
+        $queue = new Queue($queueFake, $eventsFake);
 
         $queueFake->jobsToPop[] = $jobFake = new FakeJob;
         $queue->pop();
@@ -175,15 +175,15 @@ class SqsQueueTest extends TestCase
                 'type' => 'released',
                 'queue' => null,
             ]
-        ], $eventLoggerFake->emitted);
+        ], $eventsFake->emitted);
     }
 
     public function testItEmitsJobQueuedEvent()
     {
         $this->travelTo('2000-01-02 03:04:05.060708');
-        $eventLoggerFake = $this->fakeEventLogger();
+        $eventsFake = $this->fakeEvents();
         $queueFake = $this->fakeQueue();
-        $queue = new Queue($queueFake, $eventLoggerFake);
+        $queue = new Queue($queueFake, $eventsFake);
 
         $queue->push(new FakeJob, queue: '1');
         $queue->pushOn('2', new FakeJob);
@@ -235,25 +235,25 @@ class SqsQueueTest extends TestCase
                 'type' => 'queued',
                 'queue' => '6',
             ]
-        ], $eventLoggerFake->emitted);
+        ], $eventsFake->emitted);
     }
 
     public function testTimestampsAreTheSameForBulkPush()
     {
-        $eventLoggerFake = $this->fakeEventLogger();
+        $eventsFake = $this->fakeEvents();
         $queueFake = $this->fakeQueue();
-        $queue = new Queue($queueFake, $eventLoggerFake);
+        $queue = new Queue($queueFake, $eventsFake);
 
         $queue->bulk([new FakeJob, new FakeJob]);
 
-        $this->assertCount(2, $eventLoggerFake->emitted);
+        $this->assertCount(2, $eventsFake->emitted);
         // IMPORTANT: Do not freeze time to fix this test.
-        $this->assertSame($eventLoggerFake->emitted[0]['timestamp'], $eventLoggerFake->emitted[1]['timestamp']);
+        $this->assertSame($eventsFake->emitted[0]['timestamp'], $eventsFake->emitted[1]['timestamp']);
     }
 
-    private function fakeEventLogger()
+    private function fakeEvents()
     {
-        return new class extends EventLogger {
+        return new class extends Events {
             public array $emitted = [];
 
             public function emitMany(array $payloads): void

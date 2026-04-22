@@ -19,7 +19,7 @@ class Queue
 
     public function __construct(
         protected QueueContract $queue,
-        protected EventLogger $events,
+        protected Events $events,
     ) {
         //
     }
