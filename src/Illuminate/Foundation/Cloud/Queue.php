@@ -23,6 +23,7 @@ class Queue implements QueueContract
     ) {
         //
     }
+
     /**
      * Get the size of the queue.
      *
