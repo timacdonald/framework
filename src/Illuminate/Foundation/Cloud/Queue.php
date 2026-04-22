@@ -226,18 +226,19 @@ class Queue implements QueueContract
      */
     public function setConnectionName($name)
     {
-        return $this->queue->setConnectionName($name);
+        return $this->queue->setConnectionName(...func_get_args());
     }
 
     /**
      * Set the queue configuration array.
      *
+     * @param  array  $config
      * @return $this
      */
-    public function setConfig(array $config)
+    public function setConfig($config)
     {
         if (method_exists($this->queue, 'setConfig')) {
-            $this->queue->setConfig($config);
+            $this->queue->setConfig(...func_get_args());
         }
 
         return $this;
