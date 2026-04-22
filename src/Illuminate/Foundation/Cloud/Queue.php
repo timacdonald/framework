@@ -237,16 +237,12 @@ class Queue
      */
     protected function afterJobsPushed($count, $queue)
     {
-        $timestamp = now()->toDateTimeString('microsecond');
-
-        for ($i = 0; $i < $count; $i++) {
-            $this->events->emit([
-                '_kind' => 'queue',
-                'timestamp' => $timestamp,
-                'type' => 'queued',
-                'queue' => $queue, // TODO will the queue be `null`? Do we need to run through a `getQueue` to normalize to a URL and then parse queue like we do in Pulse / Nightwatch?
-            ]);
-        }
+        $this->events->emitMany(array_fill(0, $count, [
+            '_kind' => 'queue',
+            'timestamp' => now()->toDateTimeString('microsecond'),
+            'type' => 'queued',
+            'queue' => $queue, // TODO will the queue be `null`? Do we need to run through a `getQueue` to normalize to a URL and then parse queue like we do in Pulse / Nightwatch?
+        ]));
     }
 
     /**

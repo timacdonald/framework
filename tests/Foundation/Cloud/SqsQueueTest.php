@@ -238,14 +238,30 @@ class SqsQueueTest extends TestCase
         ], $eventLoggerFake->emitted);
     }
 
+    public function testTimestampsAreTheSameForBulkPush()
+    {
+        $eventLoggerFake = $this->fakeEventLogger();
+        $queueFake = $this->fakeQueue();
+        $queue = new Queue($queueFake, $eventLoggerFake);
+
+        $queue->bulk([new FakeJob, new FakeJob]);
+
+        $this->assertCount(2, $eventLoggerFake->emitted);
+        // IMPORTANT: Do not freeze time to fix this test.
+        $this->assertSame($eventLoggerFake->emitted[0]['timestamp'], $eventLoggerFake->emitted[1]['timestamp']);
+    }
+
     private function fakeEventLogger()
     {
         return new class extends EventLogger {
             public array $emitted = [];
 
-            public function emit(array $payload): void
+            public function emitMany(array $payloads): void
             {
-                $this->emitted[] = $payload;
+                $this->emitted = [
+                    ...$this->emitted,
+                    ...$payloads,
+                ];
             }
         };
     }
