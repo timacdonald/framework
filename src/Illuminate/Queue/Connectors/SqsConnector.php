@@ -4,6 +4,8 @@ namespace Illuminate\Queue\Connectors;
 
 use Aws\Credentials\CredentialProvider;
 use Aws\Sqs\SqsClient;
+use Illuminate\Foundation\Cloud\Events;
+use Illuminate\Foundation\Cloud\Queue;
 use Illuminate\Queue\SqsQueue;
 use Illuminate\Support\Arr;
 use InvalidArgumentException;
@@ -30,7 +32,7 @@ class SqsConnector implements ConnectorInterface
             }
         }
 
-        return new SqsQueue(
+        $queue = new SqsQueue(
             new SqsClient(
                 Arr::except($config, ['token'])
             ),
@@ -39,6 +41,12 @@ class SqsConnector implements ConnectorInterface
             $config['suffix'] ?? '',
             $config['after_commit'] ?? null
         );
+
+        if (($_SERVER['LARAVEL_CLOUD_MANAGED_QUEUES'] ?? null) === '1') {
+            return new Queue($queue, app(Events::class));
+        }
+
+        return $queue;
     }
 
     /**

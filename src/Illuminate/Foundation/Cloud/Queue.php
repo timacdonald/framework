@@ -4,7 +4,7 @@ namespace Illuminate\Foundation\Cloud;
 
 use Illuminate\Contracts\Queue\Queue as QueueContract;
 
-class Queue
+class Queue implements QueueContract
 {
 
     /**
