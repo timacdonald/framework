@@ -32,7 +32,7 @@ class SqsQueueTest extends TestCase
         $queue->pop();
 
         $this->assertSame([[
-            '_kind' => 'queue',
+            '_cloud_event' => 'queue',
             'timestamp' => '2000-01-02 03:04:05.060708',
             'type' => 'started',
             'queue' => null,
@@ -53,13 +53,13 @@ class SqsQueueTest extends TestCase
 
         $this->assertSame([
             [
-                '_kind' => 'queue',
+                '_cloud_event' => 'queue',
                 'timestamp' => '2000-01-02 03:04:05.060708',
                 'type' => 'started',
                 'queue' => null,
             ],
             [
-                '_kind' => 'queue',
+                '_cloud_event' => 'queue',
                 'timestamp' => '2000-01-02 03:04:06.060708',
                 'type' => 'processed',
                 'queue' => null,
@@ -97,24 +97,24 @@ class SqsQueueTest extends TestCase
 
         $this->assertSame([
             [
-                '_kind' => 'queue',
+                '_cloud_event' => 'queue',
                 'timestamp' => '2000-01-02 03:04:05.060708',
                 'type' => 'started',
                 'queue' => 'first',
             ],
             [
-                '_kind' => 'queue',
+                '_cloud_event' => 'queue',
                 'timestamp' => '2000-01-02 03:04:05.060708',
                 'type' => 'processed',
                 'queue' => 'first',
             ], [
-                '_kind' => 'queue',
+                '_cloud_event' => 'queue',
                 'timestamp' => '2000-01-02 03:04:05.060708',
                 'type' => 'started',
                 'queue' => 'second',
             ],
             [
-                '_kind' => 'queue',
+                '_cloud_event' => 'queue',
                 'timestamp' => '2000-01-02 03:04:05.060708',
                 'type' => 'processed',
                 'queue' => 'second',
@@ -136,13 +136,13 @@ class SqsQueueTest extends TestCase
 
         $this->assertSame([
             [
-                '_kind' => 'queue',
+                '_cloud_event' => 'queue',
                 'timestamp' => '2000-01-02 03:04:05.060708',
                 'type' => 'started',
                 'queue' => null,
             ],
             [
-                '_kind' => 'queue',
+                '_cloud_event' => 'queue',
                 'timestamp' => '2000-01-02 03:04:05.060708',
                 'type' => 'failed',
                 'queue' => null,
@@ -164,13 +164,13 @@ class SqsQueueTest extends TestCase
 
         $this->assertSame([
             [
-                '_kind' => 'queue',
+                '_cloud_event' => 'queue',
                 'timestamp' => '2000-01-02 03:04:05.060708',
                 'type' => 'started',
                 'queue' => null,
             ],
             [
-                '_kind' => 'queue',
+                '_cloud_event' => 'queue',
                 'timestamp' => '2000-01-02 03:04:05.060708',
                 'type' => 'released',
                 'queue' => null,
@@ -194,43 +194,43 @@ class SqsQueueTest extends TestCase
 
         $this->assertSame([
             [
-                '_kind' => 'queue',
+                '_cloud_event' => 'queue',
                 'timestamp' => '2000-01-02 03:04:05.060708',
                 'type' => 'queued',
                 'queue' => '1',
             ],
             [
-                '_kind' => 'queue',
+                '_cloud_event' => 'queue',
                 'timestamp' => '2000-01-02 03:04:05.060708',
                 'type' => 'queued',
                 'queue' => '2',
             ],
             [
-                '_kind' => 'queue',
+                '_cloud_event' => 'queue',
                 'timestamp' => '2000-01-02 03:04:05.060708',
                 'type' => 'queued',
                 'queue' => '3',
             ],
             [
-                '_kind' => 'queue',
+                '_cloud_event' => 'queue',
                 'timestamp' => '2000-01-02 03:04:05.060708',
                 'type' => 'queued',
                 'queue' => '4',
             ],
                 [
-                '_kind' => 'queue',
+                '_cloud_event' => 'queue',
                 'timestamp' => '2000-01-02 03:04:05.060708',
                 'type' => 'queued',
                 'queue' => '5',
             ],
             [
-                '_kind' => 'queue',
+                '_cloud_event' => 'queue',
                 'timestamp' => '2000-01-02 03:04:05.060708',
                 'type' => 'queued',
                 'queue' => '6',
             ],
             [
-                '_kind' => 'queue',
+                '_cloud_event' => 'queue',
                 'timestamp' => '2000-01-02 03:04:05.060708',
                 'type' => 'queued',
                 'queue' => '6',

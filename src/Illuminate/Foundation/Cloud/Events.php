@@ -29,6 +29,8 @@ class Events
     public function emitMany(array $payloads): void
     {
         try {
+            $this->ensureConnected();
+
             $this->write($this->format($payloads));
         } catch (Throwable $e) {
             // TODO $e
@@ -41,7 +43,7 @@ class Events
         $written = 0;
 
         while (true) {
-            $thisWrite = fwrite($this->socket, $payload);
+            $thisWrite = @fwrite($this->socket, $payload);
 
             if ($thisWrite === false) {
                 $message = $this->withSocketMetaData('Unable to write to socket');
@@ -67,12 +69,12 @@ class Events
     protected function format(array $payloads)
     {
         return array_reduce($payloads, function (string $carry, array $line) {
-                if ($carry !== '') {
-                    $carry .= "\n";
-                }
+            if ($carry !== '') {
+                $carry .= "\n";
+            }
 
-                return $carry .= json_encode($line, flags: JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PRESERVE_ZERO_FRACTION | JSON_INVALID_UTF8_SUBSTITUTE);
-            }, '');
+            return $carry .= json_encode($line, flags: JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PRESERVE_ZERO_FRACTION | JSON_INVALID_UTF8_SUBSTITUTE);
+        }, '')."\n";
     }
 
     protected function ensureConnected(): void

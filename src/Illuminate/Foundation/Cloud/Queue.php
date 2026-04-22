@@ -3,9 +3,13 @@
 namespace Illuminate\Foundation\Cloud;
 
 use Illuminate\Contracts\Queue\Queue as QueueContract;
+use Illuminate\Support\Traits\ForwardsCalls;
+
+// TODO ClearableQueue
 
 class Queue implements QueueContract
 {
+    use ForwardsCalls;
 
     /**
      * @var \Illuminate\Contracts\Queue\Job|null
@@ -221,6 +225,36 @@ class Queue implements QueueContract
     }
 
     /**
+     * Set the queue configuration array.
+     *
+     * @return $this
+     */
+    public function setConfig(array $config)
+    {
+        if (method_exists($this->queue, 'setConfig')) {
+            $this->queue->setConfig($config);
+        }
+
+        return $this;
+    }
+
+    /**
+     * Get the queueable options from the job.
+     *
+     * @param  mixed  $job
+     * @param  string|null  $queue
+     * @param  string  $payload
+     * @param  \DateTimeInterface|\DateInterval|int|null  $delay
+     * @return array{DelaySeconds?: int, MessageGroupId?: string, MessageDeduplicationId?: string}
+     */
+    public function getQueueableOptions($job, $queue, $payload, $delay = null): array
+    {
+        if (method_exists($this->queue, 'getQueueableOptions')) {
+            return $this->queue->getQueueableOptions(...func_get_args());
+        }
+    }
+
+    /**
      * Handle a job being pushed.
      *
      * @param  string|null  $queue
@@ -239,7 +273,7 @@ class Queue implements QueueContract
     protected function afterJobsPushed($count, $queue)
     {
         $this->events->emitMany(array_fill(0, $count, [
-            '_kind' => 'queue',
+            '_cloud_event' => 'queue',
             'timestamp' => now()->toDateTimeString('microsecond'),
             'type' => 'queued',
             'queue' => $queue, // TODO will the queue be `null`? Do we need to run through a `getQueue` to normalize to a URL and then parse queue like we do in Pulse / Nightwatch?
@@ -258,7 +292,7 @@ class Queue implements QueueContract
         }
 
         $this->events->emit([
-            '_kind' => 'queue',
+            '_cloud_event' => 'queue',
             'timestamp' => now()->toDateTimeString('microsecond'),
             'type' => match (true) {
                 $this->processingJob->hasFailed() => 'failed',
@@ -288,10 +322,22 @@ class Queue implements QueueContract
         $this->processingJob = $job;
 
         $this->events->emit([
-            '_kind' => 'queue',
+            '_cloud_event' => 'queue',
             'timestamp' => now()->toDateTimeString('microsecond'),
             'type' => 'started',
             'queue' => $queue, // TODO will the queue be `null`? Do we need to run through a `getQueue` to normalize to a URL and then parse queue like we do in Pulse / Nightwatch?
         ]);
+    }
+
+    /**
+     * Dynamically pass method calls to the underlying dispatcher.
+     *
+     * @param  string  $method
+     * @param  array  $parameters
+     * @return mixed
+     */
+    public function __call($method, $parameters)
+    {
+        return $this->forwardDecoratedCallTo($this->queue, $method, $parameters);
     }
 }
