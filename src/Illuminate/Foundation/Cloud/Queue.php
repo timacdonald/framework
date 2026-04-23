@@ -13,20 +13,36 @@ class Queue implements QueueContract, ClearableQueue
     use ForwardsCalls;
 
     /**
+     * The currently processing job.
+     *
      * @var \Illuminate\Contracts\Queue\Job|null
      */
     protected $processingJob = null;
 
     /**
-     * @var string
+     * The queue for the currently processing job.
+     *
+     * @var string|null
      */
     protected $processingQueue;
 
     /**
+     * The datetime the last job was pushed.
+     *
+     * @var string|null
+     */
+    protected $lastJobsPushedAt = null;
+
+    /**
+     * The cache of normalized queue names.
+     *
      * @var list<string>
      */
     protected $queueCache = [];
 
+    /**
+     * Create a new Queue instance.
+     */
     public function __construct(
         protected QueueContract $queue,
         protected Events $events,
@@ -99,6 +115,8 @@ class Queue implements QueueContract, ClearableQueue
      */
     public function push($job, $data = '', $queue = null)
     {
+        $this->beforeJobPushed();
+
         $result = $this->queue->push(...func_get_args());
 
         $this->afterJobPushed($queue);
@@ -116,6 +134,8 @@ class Queue implements QueueContract, ClearableQueue
      */
     public function pushOn($queue, $job, $data = '')
     {
+        $this->beforeJobPushed();
+
         $result = $this->queue->pushOn(...func_get_args());
 
         $this->afterJobPushed($queue);
@@ -132,6 +152,8 @@ class Queue implements QueueContract, ClearableQueue
      */
     public function pushRaw($payload, $queue = null, array $options = [])
     {
+        $this->beforeJobPushed();
+
         $result = $this->queue->pushRaw(...func_get_args());
 
         $this->afterJobPushed($queue);
@@ -150,6 +172,8 @@ class Queue implements QueueContract, ClearableQueue
      */
     public function later($delay, $job, $data = '', $queue = null)
     {
+        $this->beforeJobPushed();
+
         $result = $this->queue->later(...func_get_args());
 
         $this->afterJobPushed($queue);
@@ -168,6 +192,8 @@ class Queue implements QueueContract, ClearableQueue
      */
     public function laterOn($queue, $delay, $job, $data = '')
     {
+        $this->beforeJobPushed();
+
         $result = $this->queue->laterOn(...func_get_args());
 
         $this->afterJobPushed($queue);
@@ -185,6 +211,8 @@ class Queue implements QueueContract, ClearableQueue
      */
     public function bulk($jobs, $data = '', $queue = null)
     {
+        $this->beforeJobPushed();
+
         $result = $this->queue->bulk(...func_get_args());
 
         $this->afterJobsPushed(count($jobs), $queue);
@@ -277,9 +305,20 @@ class Queue implements QueueContract, ClearableQueue
     }
 
     /**
-     * Handle a job being pushed.
+     * Handle before a job is pushed.
      *
-     * @param  string|null  $queue
+     * @return void
+     */
+    protected function beforeJobsPushed()
+    {
+        $this->lastJobsPushedAt = now()->toDateTimeString('microsecond');
+    }
+
+    /**
+     * Handle before a job is pushed.
+     *
+     * @param string|null $queue
+     * @return void
      */
     protected function afterJobPushed($queue)
     {
@@ -296,10 +335,12 @@ class Queue implements QueueContract, ClearableQueue
     {
         $this->events->emitMany(array_fill(0, $count, [
             '_cloud_event' => 'queue',
-            'timestamp' => now()->toDateTimeString('microsecond'),
+            'timestamp' => $this->lastJobsPushedAt,
             'type' => 'queued',
             'queue' => $this->resolveQueue($queue),
         ]));
+
+        $this->lastJobsPushedAt = null;
     }
 
     /**
