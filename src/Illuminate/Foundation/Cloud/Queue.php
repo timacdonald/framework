@@ -5,8 +5,8 @@ namespace Illuminate\Foundation\Cloud;
 use Illuminate\Contracts\Queue\ClearableQueue;
 use Illuminate\Contracts\Queue\Queue as QueueContract;
 use Illuminate\Support\Traits\ForwardsCalls;
-use RuntimeException;
 use ReflectionClass;
+use RuntimeException;
 
 class Queue implements QueueContract, ClearableQueue
 {
@@ -317,7 +317,7 @@ class Queue implements QueueContract, ClearableQueue
     /**
      * Handle before a job is pushed.
      *
-     * @param string|null $queue
+     * @param  string|null  $queue
      * @return void
      */
     protected function afterJobPushed($queue)
