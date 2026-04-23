@@ -254,11 +254,7 @@ class Queue implements QueueContract, ClearableQueue
      */
     public function clear($queue)
     {
-        if (method_exists($this->queue, 'clear')) {
-            return $this->queue->clear(...func_get_args());
-        }
-
-        throw new RuntimeException('Clearing queues is not supported on ['.(new ReflectionClass($this->queue))->getShortName().']');
+        return $this->queue->clear(...func_get_args());
     }
 
     /**
@@ -290,9 +286,7 @@ class Queue implements QueueContract, ClearableQueue
      */
     public function setConfig($config)
     {
-        if (method_exists($this->queue, 'setConfig')) {
-            $this->queue->setConfig(...func_get_args());
-        }
+        $this->queue->setConfig(...func_get_args());
 
         return $this;
     }
@@ -308,9 +302,7 @@ class Queue implements QueueContract, ClearableQueue
      */
     public function getQueueableOptions($job, $queue, $payload, $delay = null): array
     {
-        if (method_exists($this->queue, 'getQueueableOptions')) {
-            return $this->queue->getQueueableOptions(...func_get_args());
-        }
+        return $this->queue->getQueueableOptions(...func_get_args());
     }
 
     /**
@@ -413,17 +405,19 @@ class Queue implements QueueContract, ClearableQueue
      */
     protected function resolveQueue($queue)
     {
-        $queue ??= '';
-
-        if (array_key_exists($queue, $this->queueCache)) {
+        if (array_key_exists($queue ?? '', $this->queueCache)) {
             return $this->queueCache[$queue];
         }
 
-        if (method_exists($this->queue, 'getQueue')) {
-            $queue = $this->queue->getQueue($queue);
-        }
+        $normalizedQueue = $this->queue->getQueue($queue);
 
-        return $this->queueCache[$queue] = $queue;
+        $prefix = preg_quote($_SERVER['SQS_PREFIX'], '#');
+        $normalizedQueue = preg_replace("#^{$prefix}/#", '', $normalizedQueue);
+
+        $suffix = preg_quote($_SERVER['SQS_SUFFIX'], '#');
+        $normalizedQueue = preg_replace("#{$suffix}$#", '', $normalizedQueue);
+
+        return $this->queueCache[$queue] = $normalizedQueue;
     }
 
     /**

@@ -13,10 +13,25 @@ use Orchestra\Testbench\TestCase;
 
 class SqsQueueTest extends TestCase
 {
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $_SERVER['SQS_PREFIX'] = 'https://sqs.us-east-2.amazonaws.com/1234567';
+        $_SERVER['SQS_SUFFIX'] = '-env-8280cf2c-2081-47e8-a1f1-9cdfcba8618f';
+    }
+
+    protected function tearDown(): void
+    {
+        parent::tearDown();
+
+        unset($_SERVER['SQS_PREFIX'], $_SERVER['SQS_SUFFIX']);
+    }
+
     public function testItDoesNotEmitEventsWhilePoppingWhenNoJobsAreProcessingAndNoJobsAreAvailableToPop()
     {
         $eventsFake = $this->fakeEvents();
-        $queueFake = new QueueFake($this->app, [], null);
+        $queueFake = $this->fakeQueue();
         $queue = new Queue($queueFake, $eventsFake);
 
         $queue->pop();
@@ -38,7 +53,7 @@ class SqsQueueTest extends TestCase
             '_cloud_event' => 'queue',
             'timestamp' => '2000-01-02 03:04:05.060708',
             'type' => 'started',
-            'queue' => '',
+            'queue' => 'default',
         ]], $eventsFake->emitted);
     }
 
@@ -59,13 +74,13 @@ class SqsQueueTest extends TestCase
                 '_cloud_event' => 'queue',
                 'timestamp' => '2000-01-02 03:04:05.060708',
                 'type' => 'started',
-                'queue' => '',
+                'queue' => 'default',
             ],
             [
                 '_cloud_event' => 'queue',
                 'timestamp' => '2000-01-02 03:04:06.060708',
                 'type' => 'processed',
-                'queue' => '',
+                'queue' => 'default',
                 'duration_ms' => 1000,
             ],
         ], $eventsFake->emitted);
@@ -145,13 +160,13 @@ class SqsQueueTest extends TestCase
                 '_cloud_event' => 'queue',
                 'timestamp' => '2000-01-02 03:04:05.060708',
                 'type' => 'started',
-                'queue' => '',
+                'queue' => 'default',
             ],
             [
                 '_cloud_event' => 'queue',
                 'timestamp' => '2000-01-02 03:04:05.060708',
                 'type' => 'failed',
-                'queue' => '',
+                'queue' => 'default',
                 'duration_ms' => 0,
             ]
         ], $eventsFake->emitted);
@@ -174,13 +189,13 @@ class SqsQueueTest extends TestCase
                 '_cloud_event' => 'queue',
                 'timestamp' => '2000-01-02 03:04:05.060708',
                 'type' => 'started',
-                'queue' => '',
+                'queue' => 'default',
             ],
             [
                 '_cloud_event' => 'queue',
                 'timestamp' => '2000-01-02 03:04:05.060708',
                 'type' => 'released',
-                'queue' => '',
+                'queue' => 'default',
                 'duration_ms' => 0,
             ]
         ], $eventsFake->emitted);
@@ -295,13 +310,13 @@ class SqsQueueTest extends TestCase
                 '_cloud_event' => 'queue',
                 'timestamp' => '2000-01-01 16:04:05.060708',
                 'type' => 'started',
-                'queue' => '',
+                'queue' => 'default',
             ],
             [
                 '_cloud_event' => 'queue',
                 'timestamp' => '2000-01-01 16:04:06.060708',
                 'type' => 'processed',
-                'queue' => '',
+                'queue' => 'default',
                 'duration_ms' => 1000,
             ],
         ], $eventsFake->emitted);
@@ -331,6 +346,13 @@ class SqsQueueTest extends TestCase
             public function pop($queue = null)
             {
                 return array_shift($this->jobsToPop);
+            }
+
+            public function getQueue($queue)
+            {
+                $queue ??= 'default';
+
+                return $_SERVER['SQS_PREFIX'].'/'.$queue.$_SERVER['SQS_SUFFIX'];
             }
         };
     }
