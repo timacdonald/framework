@@ -7,7 +7,14 @@ use Throwable;
 
 class Events
 {
+    /**
+     * The socket connection timeout.
+     */
     protected const int CONNECTION_TIMEOUT = 10;
+
+    /**
+     * The socket writing timeout.
+     */
     protected const int TIMEOUT = 2;
 
     /**
