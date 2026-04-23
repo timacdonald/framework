@@ -5,6 +5,8 @@ namespace Illuminate\Queue;
 use Closure;
 use Illuminate\Contracts\Queue\Factory as FactoryContract;
 use Illuminate\Contracts\Queue\Monitor as MonitorContract;
+use Illuminate\Foundation\Cloud\Events;
+use Illuminate\Foundation\Cloud\Queue;
 use Illuminate\Support\Queue\Concerns\ResolvesQueueRoutes;
 use InvalidArgumentException;
 
@@ -190,6 +192,8 @@ class QueueManager implements FactoryContract, MonitorContract
         $queue = $this->getConnector($config['driver'])
             ->connect($config)
             ->setConnectionName($name);
+
+        $queue = new Queue($queue, $this->app->make(Events::class));
 
         if (method_exists($queue, 'setConfig')) {
             $queue->setConfig($config);

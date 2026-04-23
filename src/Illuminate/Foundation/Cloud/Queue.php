@@ -2,12 +2,13 @@
 
 namespace Illuminate\Foundation\Cloud;
 
+use Illuminate\Contracts\Queue\ClearableQueue;
 use Illuminate\Contracts\Queue\Queue as QueueContract;
 use Illuminate\Support\Traits\ForwardsCalls;
+use RuntimeException;
+use ReflectionClass;
 
-// TODO ClearableQueue
-
-class Queue implements QueueContract
+class Queue implements QueueContract, ClearableQueue
 {
     use ForwardsCalls;
 
@@ -206,6 +207,21 @@ class Queue implements QueueContract
         $this->afterJobPopped($queue, $job);
 
         return $job;
+    }
+
+    /**
+     * Delete all of the jobs from the queue.
+     *
+     * @param  string  $queue
+     * @return int
+     */
+    public function clear($queue)
+    {
+        if (method_exists($this->queue, 'clear')) {
+            return $this->queue->clear(...func_get_args());
+        }
+
+        throw new RuntimeException('Clearing queues is not supported on ['.(new ReflectionClass($this->queue))->getShortName().']'););
     }
 
     /**
