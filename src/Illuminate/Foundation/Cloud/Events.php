@@ -86,7 +86,7 @@ class Events
      *
      * @param  list<array<string, mixed>>  $payloads
      */
-    protected function format(array $payloads)
+    protected function format(array $payloads): string
     {
         return array_reduce($payloads, function (string $carry, array $line) {
             if ($carry !== '') {
@@ -182,7 +182,7 @@ class Events
                     true => 'true',
                     false => 'false',
                     default => $meta[$key],
-                }.PHP_EOL;
+                }."\n";
             } catch (Throwable) {
                 return $carry;
             }
