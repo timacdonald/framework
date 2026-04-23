@@ -221,7 +221,7 @@ class Queue implements QueueContract, ClearableQueue
             return $this->queue->clear(...func_get_args());
         }
 
-        throw new RuntimeException('Clearing queues is not supported on ['.(new ReflectionClass($this->queue))->getShortName().']'););
+        throw new RuntimeException('Clearing queues is not supported on ['.(new ReflectionClass($this->queue))->getShortName().']');
     }
 
     /**
