@@ -63,6 +63,7 @@ class SqsQueueTest extends TestCase
                 'timestamp' => '2000-01-02 03:04:06.060708',
                 'type' => 'processed',
                 'queue' => '',
+                'duration_ms' => 1000,
             ],
         ], $eventsFake->emitted);
     }
@@ -107,6 +108,7 @@ class SqsQueueTest extends TestCase
                 'timestamp' => '2000-01-02 03:04:05.060708',
                 'type' => 'processed',
                 'queue' => 'first',
+                'duration_ms' => 0,
             ], [
                 '_cloud_event' => 'queue',
                 'timestamp' => '2000-01-02 03:04:05.060708',
@@ -118,6 +120,7 @@ class SqsQueueTest extends TestCase
                 'timestamp' => '2000-01-02 03:04:05.060708',
                 'type' => 'processed',
                 'queue' => 'second',
+                'duration_ms' => 0,
             ]
         ], $eventsFake->emitted);
     }
@@ -146,6 +149,7 @@ class SqsQueueTest extends TestCase
                 'timestamp' => '2000-01-02 03:04:05.060708',
                 'type' => 'failed',
                 'queue' => '',
+                'duration_ms' => 0,
             ]
         ], $eventsFake->emitted);
     }
@@ -174,6 +178,7 @@ class SqsQueueTest extends TestCase
                 'timestamp' => '2000-01-02 03:04:05.060708',
                 'type' => 'released',
                 'queue' => '',
+                'duration_ms' => 0,
             ]
         ], $eventsFake->emitted);
     }
@@ -249,6 +254,24 @@ class SqsQueueTest extends TestCase
         $this->assertCount(2, $eventsFake->emitted);
         // IMPORTANT: Do not freeze time to fix this test.
         $this->assertSame($eventsFake->emitted[0]['timestamp'], $eventsFake->emitted[1]['timestamp']);
+    }
+
+    public function testItCapturesDurationForMultipleJobs()
+    {
+        $this->travelTo('2000-01-02 03:04:05.060708');
+        $eventsFake = $this->fakeEvents();
+        $queueFake = $this->fakeQueue();
+        $queue = new Queue($queueFake, $eventsFake);
+
+        $queueFake->jobsToPop = [new FakeJob, new FakeJob];
+        $queue->pop();
+        $this->travel(1)->second();
+        $queue->pop();
+        $this->travel(0.5)->second();
+        $queue->pop();
+
+        $this->assertSame(1000, $eventsFake->emitted[1]['duration_ms']);
+        $this->assertSame(500, $eventsFake->emitted[3]['duration_ms']);
     }
 
     private function fakeEvents()

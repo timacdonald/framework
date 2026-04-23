@@ -2,6 +2,8 @@
 
 namespace Illuminate\Foundation\Cloud;
 
+use Carbon\CarbonImmutable;
+use Carbon\Doctrine\CarbonImmutableType;
 use Illuminate\Contracts\Queue\ClearableQueue;
 use Illuminate\Contracts\Queue\Queue as QueueContract;
 use Illuminate\Support\Traits\ForwardsCalls;
@@ -32,6 +34,13 @@ class Queue implements QueueContract, ClearableQueue
      * @var string|null
      */
     protected $lastJobsPushedAt = null;
+
+    /**
+     * The date the last job started processing.
+     *
+     * @var \Carbon\CarbonImmutable
+     */
+    protected $lastJobStartedAt = null;
 
     /**
      * The cache of normalized queue names.
@@ -309,9 +318,9 @@ class Queue implements QueueContract, ClearableQueue
      *
      * @return void
      */
-    protected function beforeJobsPushed()
+    protected function beforeJobPushed()
     {
-        $this->lastJobsPushedAt = now()->toDateTimeString('microsecond');
+        $this->lastJobsPushedAt = CarbonImmutable::now('UTC')->toDateTimeString('microsecond');
     }
 
     /**
@@ -354,18 +363,21 @@ class Queue implements QueueContract, ClearableQueue
             return;
         }
 
+        $now = CarbonImmutable::now('UTC');
+
         $this->events->emit([
             '_cloud_event' => 'queue',
-            'timestamp' => now()->toDateTimeString('microsecond'),
+            'timestamp' => $now->toDateTimeString('microsecond'),
             'type' => match (true) {
                 $this->processingJob->hasFailed() => 'failed',
                 $this->processingJob->isReleased() => 'released',
                 default => 'processed',
             },
             'queue' => $this->processingQueue,
+            'duration_ms' => (int) $this->lastJobStartedAt->diffInMilliseconds($now),
         ]);
 
-        $this->processingQueue = $this->processingJob = null;
+        $this->processingQueue = $this->processingJob = $this->lastJobStartedAt = null;
     }
 
     /**
@@ -383,10 +395,11 @@ class Queue implements QueueContract, ClearableQueue
 
         $this->processingJob = $job;
         $this->processingQueue = $this->resolveQueue($queue);
+        $this->lastJobStartedAt = CarbonImmutable::now();
 
         $this->events->emit([
             '_cloud_event' => 'queue',
-            'timestamp' => now()->toDateTimeString('microsecond'),
+            'timestamp' => $this->lastJobStartedAt->toDateTimeString('microsecond'),
             'type' => 'started',
             'queue' => $this->processingQueue,
         ]);
