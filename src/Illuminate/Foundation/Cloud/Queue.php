@@ -47,7 +47,7 @@ class Queue implements QueueContract, ClearableQueue
      *
      * @var list<string>
      */
-    protected $queueCache = [];
+    protected $normalizedQueueCache = [];
 
     /**
      * Create a new Queue instance.
@@ -338,7 +338,7 @@ class Queue implements QueueContract, ClearableQueue
             '_cloud_event' => 'queue',
             'timestamp' => $this->lastJobPushedAt->toDateTimeString('microsecond'),
             'type' => 'queued',
-            'queue' => $this->resolveQueue($queue),
+            'queue' => $this->normalizeQueue($queue),
         ]));
 
         $this->lastJobPushedAt = null;
@@ -386,7 +386,7 @@ class Queue implements QueueContract, ClearableQueue
         }
 
         $this->processingJob = $job;
-        $this->processingQueue = $this->resolveQueue($queue);
+        $this->processingQueue = $this->normalizeQueue($queue);
         $this->lastJobStartedAt = CarbonImmutable::now('UTC');
 
         $this->events->emit([
@@ -398,15 +398,15 @@ class Queue implements QueueContract, ClearableQueue
     }
 
     /**
-     * Resolve the queue name.
+     * Normalize the queue name.
      *
      * @param  string|null  $queue
      * @return string
      */
-    protected function resolveQueue($queue)
+    protected function normalizeQueue($queue)
     {
-        if (array_key_exists($queue ?? '', $this->queueCache)) {
-            return $this->queueCache[$queue];
+        if (array_key_exists($queue ?? '', $this->normalizedQueueCache)) {
+            return $this->normalizedQueueCache[$queue];
         }
 
         $normalizedQueue = $this->queue->getQueue($queue);
@@ -417,7 +417,7 @@ class Queue implements QueueContract, ClearableQueue
         $suffix = preg_quote($_SERVER['SQS_SUFFIX'], '#');
         $normalizedQueue = preg_replace("#{$suffix}$#", '', $normalizedQueue);
 
-        return $this->queueCache[$queue] = $normalizedQueue;
+        return $this->normalizedQueueCache[$queue] = $normalizedQueue;
     }
 
     /**
