@@ -3,12 +3,9 @@
 namespace Illuminate\Foundation\Cloud;
 
 use Carbon\CarbonImmutable;
-use Carbon\Doctrine\CarbonImmutableType;
 use Illuminate\Contracts\Queue\ClearableQueue;
 use Illuminate\Contracts\Queue\Queue as QueueContract;
 use Illuminate\Support\Traits\ForwardsCalls;
-use ReflectionClass;
-use RuntimeException;
 
 class Queue implements QueueContract, ClearableQueue
 {
@@ -275,7 +272,9 @@ class Queue implements QueueContract, ClearableQueue
      */
     public function setConnectionName($name)
     {
-        return $this->queue->setConnectionName(...func_get_args());
+        $this->queue->setConnectionName(...func_get_args());
+
+        return $this;
     }
 
     /**

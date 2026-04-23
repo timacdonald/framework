@@ -3,8 +3,12 @@
 namespace Illuminate\Foundation;
 
 use Illuminate\Database\Migrations\Migrator;
+use Illuminate\Foundation\Bootstrap\BootProviders;
 use Illuminate\Foundation\Bootstrap\HandleExceptions;
 use Illuminate\Foundation\Bootstrap\LoadConfiguration;
+use Illuminate\Foundation\Cloud\Events;
+use Illuminate\Foundation\Cloud\QueueConnector;
+use Illuminate\Queue\Connectors\SqsConnector;
 use Illuminate\Queue\Worker;
 use Monolog\Formatter\JsonFormatter;
 use Monolog\Handler\SocketHandler;
@@ -36,6 +40,9 @@ class Cloud
             },
             HandleExceptions::class => function () use ($app) {
                 static::configureCloudLogging($app);
+            },
+            BootProviders::class => function () use ($app) {
+                static::bootManagedQueues($app);
             },
             default => fn () => true,
         })();
@@ -121,7 +128,7 @@ class Cloud
      */
     public static function configureManagedQueues(Application $app): void
     {
-        if ((int) ($_SERVER['LARAVEL_CLOUD_MANAGED_QUEUES'] ?? 0) === 1) {
+        if (($_SERVER['LARAVEL_CLOUD_MANAGED_QUEUES'] ?? null) === '1') {
             Worker::$restartable = false;
 
             $app['config']->set(
@@ -136,6 +143,20 @@ class Cloud
                 );
             }
         }
+    }
+
+    /**
+     * Boot managed queues if applicable.
+     */
+    public static function bootManagedQueues(Application $app): void
+    {
+        if (($_SERVER['LARAVEL_CLOUD_MANAGED_QUEUES'] ?? null) !== '1') {
+            return;
+        }
+
+        $app['queue']->extend('sqs', function () {
+            return new QueueConnector(new SqsConnector, new Events);
+        });
     }
 
     /**

@@ -2,30 +2,46 @@
 
 namespace Tests\Tests\Foundation;
 
+use Illuminate\Foundation\Cloud;
 use Illuminate\Foundation\Cloud\Events;
 use Illuminate\Foundation\Cloud\Queue;
 use Illuminate\Queue\Jobs\FakeJob;
 use Illuminate\Support\Carbon;
-use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Testing\Fakes\QueueFake;
-use Orchestra\Testbench\Attributes\WithEnv;
 use Orchestra\Testbench\TestCase;
 
 class SqsQueueTest extends TestCase
 {
     protected function setUp(): void
     {
-        parent::setUp();
-
+        $_SERVER['LARAVEL_CLOUD'] = $_SERVER['LARAVEL_CLOUD_MANAGED_QUEUES'] = '1';
         $_SERVER['SQS_PREFIX'] = 'https://sqs.us-east-2.amazonaws.com/1234567';
         $_SERVER['SQS_SUFFIX'] = '-env-8280cf2c-2081-47e8-a1f1-9cdfcba8618f';
+
+        parent::setUp();
     }
 
     protected function tearDown(): void
     {
         parent::tearDown();
 
-        unset($_SERVER['SQS_PREFIX'], $_SERVER['SQS_SUFFIX']);
+        unset($_SERVER['LARAVEL_CLOUD'], $_SERVER['LARAVEL_CLOUD_MANAGED_QUEUES'], $_SERVER['SQS_PREFIX'], $_SERVER['SQS_SUFFIX']);
+    }
+
+    public function testItBindsCloudQueue()
+    {
+        Cloud::bootManagedQueues($this->app);
+
+        $this->assertInstanceOf(Queue::class, $this->app['queue']->connection('sqs'));
+    }
+
+    public function testItDoesNotBindWhenManagedQueuesIsInactive()
+    {
+        unset($_SERVER['LARAVEL_CLOUD_MANAGED_QUEUE']);
+
+        Cloud::bootManagedQueues($this->app);
+
+        $this->assertInstanceOf(Queue::class, $this->app['queue']->connection('sqs'));
     }
 
     public function testItDoesNotEmitEventsWhilePoppingWhenNoJobsAreProcessingAndNoJobsAreAvailableToPop()
