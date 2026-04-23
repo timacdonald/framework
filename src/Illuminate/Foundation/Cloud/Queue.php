@@ -29,11 +29,11 @@ class Queue implements QueueContract, ClearableQueue
     protected $processingQueue;
 
     /**
-     * The datetime the last job was pushed.
+     * The date the last job was pushed.
      *
-     * @var string|null
+     * @var \Carbon\CarbonImmutable|null
      */
-    protected $lastJobsPushedAt = null;
+    protected $lastJobPushedAt = null;
 
     /**
      * The date the last job started processing.
@@ -320,7 +320,7 @@ class Queue implements QueueContract, ClearableQueue
      */
     protected function beforeJobPushed()
     {
-        $this->lastJobsPushedAt = CarbonImmutable::now('UTC')->toDateTimeString('microsecond');
+        $this->lastJobPushedAt = CarbonImmutable::now('UTC');
     }
 
     /**
@@ -344,12 +344,12 @@ class Queue implements QueueContract, ClearableQueue
     {
         $this->events->emitMany(array_fill(0, $count, [
             '_cloud_event' => 'queue',
-            'timestamp' => $this->lastJobsPushedAt,
+            'timestamp' => $this->lastJobPushedAt->toDateTimeString('microsecond'),
             'type' => 'queued',
             'queue' => $this->resolveQueue($queue),
         ]));
 
-        $this->lastJobsPushedAt = null;
+        $this->lastJobPushedAt = null;
     }
 
     /**
@@ -395,7 +395,7 @@ class Queue implements QueueContract, ClearableQueue
 
         $this->processingJob = $job;
         $this->processingQueue = $this->resolveQueue($queue);
-        $this->lastJobStartedAt = CarbonImmutable::now();
+        $this->lastJobStartedAt = CarbonImmutable::now('UTC');
 
         $this->events->emit([
             '_cloud_event' => 'queue',

@@ -5,7 +5,10 @@ namespace Tests\Tests\Foundation;
 use Illuminate\Foundation\Cloud\Events;
 use Illuminate\Foundation\Cloud\Queue;
 use Illuminate\Queue\Jobs\FakeJob;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Testing\Fakes\QueueFake;
+use Orchestra\Testbench\Attributes\WithEnv;
 use Orchestra\Testbench\TestCase;
 
 class SqsQueueTest extends TestCase
@@ -272,6 +275,37 @@ class SqsQueueTest extends TestCase
 
         $this->assertSame(1000, $eventsFake->emitted[1]['duration_ms']);
         $this->assertSame(500, $eventsFake->emitted[3]['duration_ms']);
+    }
+
+    public function testItCapturesUtcTime()
+    {
+        date_default_timezone_set('Australia/Melbourne');
+        $this->travelTo(Carbon::parse('2000-01-02 03:04:05.060708', 'Australia/Melbourne'));
+        $eventsFake = $this->fakeEvents();
+        $queueFake = $this->fakeQueue();
+        $queue = new Queue($queueFake, $eventsFake);
+
+        $queueFake->jobsToPop[] = new FakeJob;
+        $queue->pop();
+        $this->travel(1)->second();
+        $queue->pop();
+
+        $this->assertSame([
+            [
+                '_cloud_event' => 'queue',
+                'timestamp' => '2000-01-01 16:04:05.060708',
+                'type' => 'started',
+                'queue' => '',
+            ],
+            [
+                '_cloud_event' => 'queue',
+                'timestamp' => '2000-01-01 16:04:06.060708',
+                'type' => 'processed',
+                'queue' => '',
+                'duration_ms' => 1000,
+            ],
+        ], $eventsFake->emitted);
+
     }
 
     private function fakeEvents()
