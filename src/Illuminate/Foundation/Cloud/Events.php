@@ -11,11 +11,15 @@ class Events
     protected const int TIMEOUT = 2;
 
     /**
+     * The cloud socket.
+     *
      * @var resource|null
      */
     protected $socket = null;
 
     /**
+     * Emit an event.
+     *
      * @param  array<string, mixed>  $payload
      */
     public function emit(array $payload): void
@@ -24,6 +28,8 @@ class Events
     }
 
     /**
+     * Emit many events.
+     *
      * @param  list<array<string, mixed>>  $payloads
      */
     public function emitMany(array $payloads): void
@@ -37,6 +43,11 @@ class Events
         }
     }
 
+    /**
+     * Write the payload to the socket.
+     *
+     * @param  list<array<string, mixed>>  $payloads
+     */
     protected function write(string $payload): void
     {
         $originalPayloadLength = strlen($payload);
@@ -64,6 +75,8 @@ class Events
     }
 
     /**
+     * Format the payload.
+     *
      * @param  list<array<string, mixed>>  $payloads
      */
     protected function format(array $payloads)
@@ -77,6 +90,9 @@ class Events
         }, '')."\n";
     }
 
+    /**
+    * Ensure the socket is connected.
+    */
     protected function ensureConnected(): void
     {
         if (! $this->connected()) {
@@ -84,6 +100,9 @@ class Events
         }
     }
 
+    /**
+    * Connect the socket.
+    */
     protected function connect(): void
     {
         $socket = stream_socket_client(
@@ -109,6 +128,9 @@ class Events
         $this->socket = $socket;
     }
 
+    /**
+    * Determine if the socket is connected.
+    */
     protected function connected(): bool
     {
         if (gettype($this->socket) !== 'resource') {
@@ -120,6 +142,9 @@ class Events
         return ! $meta['timed_out'] && ! $meta['eof'];
     }
 
+    /**
+    * Disconnect the socket.
+    */
     protected function disconnect(): void
     {
         try {
@@ -131,6 +156,9 @@ class Events
         $this->socket = null;
     }
 
+    /**
+    * Decorate the message with the socket's meta data.
+    */
     protected function withSocketMetaData(string $message): string
     {
         $prefix = "{$message}\n---\n";
