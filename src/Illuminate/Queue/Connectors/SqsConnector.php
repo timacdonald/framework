@@ -4,7 +4,6 @@ namespace Illuminate\Queue\Connectors;
 
 use Aws\Credentials\CredentialProvider;
 use Aws\Sqs\SqsClient;
-use Illuminate\Foundation\Cloud\Queue;
 use Illuminate\Queue\SqsQueue;
 use Illuminate\Support\Arr;
 use InvalidArgumentException;
