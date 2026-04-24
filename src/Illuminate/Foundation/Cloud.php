@@ -8,6 +8,7 @@ use Illuminate\Foundation\Bootstrap\HandleExceptions;
 use Illuminate\Foundation\Bootstrap\LoadConfiguration;
 use Illuminate\Foundation\Cloud\Events;
 use Illuminate\Foundation\Cloud\QueueConnector;
+use Illuminate\Queue\Connectors\DatabaseConnector;
 use Illuminate\Queue\Connectors\SqsConnector;
 use Illuminate\Queue\Worker;
 use Monolog\Formatter\JsonFormatter;
@@ -154,8 +155,13 @@ class Cloud
             return;
         }
 
-        $app['queue']->extend('sqs', function () {
+        $app['queue']->addConnector('sqs', function () {
             return new QueueConnector(new SqsConnector, new Events);
+        });
+
+        // Testing...
+        $app['queue']->addConnector('database', function () use ($app) {
+            return new QueueConnector(new DatabaseConnector($app['db']), new Events);
         });
     }
 
