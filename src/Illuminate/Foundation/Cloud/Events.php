@@ -65,11 +65,11 @@ class Events
             $thisWrite = @fwrite($this->socket, $payload);
 
             if ($thisWrite === false) {
-                $message = $this->withSocketMetaData('Unable to write to socket');
+                $e = new RuntimeException($this->withSocketMetaData('Unable to write to socket'));
 
                 $this->disconnect();
 
-                throw new RuntimeException($message);
+                throw $e;
             }
 
             $written += $thisWrite;
@@ -126,11 +126,11 @@ class Events
         }
 
         if (! stream_set_timeout($socket, self::TIMEOUT)) {
-            $message = $this->withSocketMetaData("Failed configuring socket timeout");
+            $e = new RuntimeException($this->withSocketMetaData("Failed configuring socket timeout"));
 
             $this->disconnect();
 
-            throw new RuntimeException($message);
+            throw $e;
         }
 
         $this->socket = $socket;
