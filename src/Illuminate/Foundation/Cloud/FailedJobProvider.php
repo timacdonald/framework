@@ -12,9 +12,9 @@ class FailedJobProvider implements FailedJobProviderInterface
     /**
      * The last job details resolver.
      *
-     * @var  (callable(): (array{total_attempts: int, started_at: CarbonImmutable}))  $lastJobDetailsResolver
+     * @var  (callable(): (array{total_attempts: int, started_at: CarbonImmutable}))  $processingJobDetailsResolver
     */
-    protected $lastJobDetailsResolver;
+    protected $processingJobDetailsResolver;
 
     /**
      * Create a new instance.
@@ -38,14 +38,14 @@ class FailedJobProvider implements FailedJobProviderInterface
     public function log($connection, $queue, $payload, $exception)
     {
         $now = CarbonImmutable::now('UTC');
-        $lastJobDetails = call_user_func($this->lastJobDetailsResolver);
+        $processingJobDetails = call_user_func($this->processingJobDetailsResolver);
 
         $this->events->emit([
             '_cloud_event' => 'failed_job',
             'id' => $id = Str::uuid7($now)->toString(),
             'queue' => $queue,
-            'started_at' => $lastJobDetails['started_at']->toDateTimeString('microsecond'),
-            'total_attempts' => $lastJobDetails['total_attempts'],
+            'started_at' => $processingJobDetails['started_at']->toDateTimeString('microsecond'),
+            'total_attempts' => $processingJobDetails['total_attempts'],
             'payload' => $payload,
             'exception' => (string) mb_convert_encoding($exception, 'UTF-8'),
         ]);
@@ -55,7 +55,7 @@ class FailedJobProvider implements FailedJobProviderInterface
             'timestamp' => $now->toDateTimeString('microsecond'),
             'type' => 'failed',
             'queue' => $queue,
-            'duration_ms' => (int) $lastJobDetails['started_at']->diffInMilliseconds($now),
+            'duration_ms' => (int) $processingJobDetails['started_at']->diffInMilliseconds($now),
         ]);
 
         return $id;
@@ -118,12 +118,12 @@ class FailedJobProvider implements FailedJobProviderInterface
     /**
      * Set the last job details resolver.
      *
-     * @param  (callable(): (array{total_attempts: int, started_at: CarbonImmutable}))  $lastJobDetailsResolver  $callback
+     * @param  (callable(): (array{total_attempts: int, started_at: CarbonImmutable}))  $processingJobDetailsResolver  $callback
      * @return $this
     */
-    public function setLastJobDetailsResolver(callable $callback)
+    public function setProcessingJobDetailsResolver(callable $callback)
     {
-        $this->lastJobDetailsResolver = $callback;
+        $this->processingJobDetailsResolver = $callback;
 
         return $this;
     }

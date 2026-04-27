@@ -37,7 +37,7 @@ class Queue implements QueueContract, ClearableQueue
      *
      * @var \Carbon\CarbonImmutable
      */
-    protected $lastJobStartedAt = null;
+    protected $processingJobStartedAt = null;
 
     /**
      * The cache of normalized queue names.
@@ -309,11 +309,11 @@ class Queue implements QueueContract, ClearableQueue
      *
      * @return array{total_attempts: int, started_at: CarbonImmutable}
      */
-    public function lastJobDetails()
+    public function processingJobDetails()
     {
         return [
             'total_attempts' => $this->processingJob->attempts(),
-            'started_at' => $this->lastJobStartedAt,
+            'started_at' => $this->processingJobStartedAt,
         ];
     }
 
@@ -383,7 +383,7 @@ class Queue implements QueueContract, ClearableQueue
                 default => 'processed',
             },
             'queue' => $this->processingQueue,
-            'duration_ms' => (int) $this->lastJobStartedAt->diffInMilliseconds($now),
+            'duration_ms' => (int) $this->processingJobStartedAt->diffInMilliseconds($now),
         ]);
 
         $this->flush();
@@ -404,11 +404,11 @@ class Queue implements QueueContract, ClearableQueue
 
         $this->processingJob = $job;
         $this->processingQueue = $queue;
-        $this->lastJobStartedAt = CarbonImmutable::now('UTC');
+        $this->processingJobStartedAt = CarbonImmutable::now('UTC');
 
         $this->events->emit([
             '_cloud_event' => 'queue',
-            'timestamp' => $this->lastJobStartedAt->toDateTimeString('microsecond'),
+            'timestamp' => $this->processingJobStartedAt->toDateTimeString('microsecond'),
             'type' => 'started',
             'queue' => $this->processingQueue,
         ]);
@@ -459,7 +459,7 @@ class Queue implements QueueContract, ClearableQueue
         $this->lastJobPushedAt
             = $this->processingQueue
             = $this->processingJob
-            = $this->lastJobStartedAt
+            = $this->processingJobStartedAt
             = null;
     }
 }
