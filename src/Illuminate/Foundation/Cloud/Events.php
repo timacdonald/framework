@@ -2,7 +2,7 @@
 
 namespace Illuminate\Foundation\Cloud;
 
-use Symfony\Component\Translation\Exception\RuntimeException;
+use RuntimeException;
 use Throwable;
 
 class Events
@@ -28,8 +28,6 @@ class Events
      * Emit an event.
      *
      * @param  array<string, mixed>  $payload
-     *
-     * TODO: only accept a closure that we can rescue
      */
     public function emit(array $payload): void
     {
@@ -119,7 +117,7 @@ class Events
             error_code: $errorCode,
             error_message: $errorMessage,
             timeout: self::CONNECTION_TIMEOUT,
-            // TODO flags: STREAM_CLIENT_CONNECT | STREAM_CLIENT_PERSISTENT
+            flags: STREAM_CLIENT_CONNECT | STREAM_CLIENT_PERSISTENT,
         );
 
         if ($socket === false) {
@@ -146,9 +144,13 @@ class Events
             return false;
         }
 
-        $meta = stream_get_meta_data($this->socket);
+        if (feof($this->socket)) {
+            $this->disconnect();
 
-        return ! $meta['timed_out'] && ! $meta['eof'];
+            return false;
+        }
+
+        return true;
     }
 
     /**

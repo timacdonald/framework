@@ -11,26 +11,22 @@ $socket = stream_socket_server(
 $connections = [];
 
 $check = function () use (&$connections, &$socket) {
-    if (count($connections) < 2) {
-        $connection = @stream_socket_accept($socket, 0.1);
+    $connection = @stream_socket_accept($socket, 0);
 
-        if ($connection) {
-            stream_set_blocking($connection, false);
-            $connections[] = $connection;
-        }
+    if ($connection) {
+        stream_set_blocking($connection, false);
+        $connections[] = $connection;
+        echo '>>>>> New connection established. Current connection count: '.count($connections).PHP_EOL;
     }
 };
 
 while (true) {
     $check();
 
-    foreach ($connections as $connection) {
-        $message = fgets($connection);
-
-        if ($message === false) {
-            continue;
+    foreach ($connections as $index => $connection) {
+        $id = $index + 1;
+        while ($message = fgets($connection)) {
+            echo "Connection [{$id}]: ".$message;
         }
-
-        echo $message;
     }
 }
