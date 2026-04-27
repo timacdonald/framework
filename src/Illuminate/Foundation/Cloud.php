@@ -132,18 +132,20 @@ class Cloud
      */
     public static function configureManagedQueues(Application $app): void
     {
-        if (($_SERVER['LARAVEL_CLOUD_MANAGED_QUEUES'] ?? null) === '1') {
-            $app['config']->set(
-                'queue.connections.sqs.credentials',
-                'ecs'
-            );
+        if (! Cloud::managedQueuesAreActive()) {
+            return;
+        }
 
-            if (isset($_SERVER['LARAVEL_CLOUD_REGION'])) {
-                $app['config']->set(
-                    'queue.connections.sqs.region',
-                    $_SERVER['LARAVEL_CLOUD_REGION']
-                );
-            }
+        $app['config']->set(
+            'queue.connections.sqs.credentials',
+            'ecs'
+        );
+
+        if (isset($_SERVER['LARAVEL_CLOUD_REGION'])) {
+            $app['config']->set(
+                'queue.connections.sqs.region',
+                $_SERVER['LARAVEL_CLOUD_REGION']
+            );
         }
     }
 
@@ -152,11 +154,17 @@ class Cloud
      */
     public static function bootManagedQueues(Application $app): void
     {
-        if (($_SERVER['LARAVEL_CLOUD_MANAGED_QUEUES'] ?? null) !== '1') {
+        if (! Cloud::managedQueuesAreActive()) {
             return;
         }
 
         $app->singleton(Events::class);
+
+        $app->beforeResolving('queue.failer', function () use ($app) {
+            if (! $app->resolved('queue.failer')) {
+                $app['queue.failer'] = $app[FailedJobProvider::class];
+            }
+        });
 
         $app->singleton(QueueConnector::class, function ($app) {
             // Temporary to allow testing locally with database driver.
@@ -168,11 +176,6 @@ class Cloud
             return new QueueConnector($baseConnector, $app['queue.failer'], $app[Events::class]);
         });
 
-        $app->beforeResolving('queue.failer', function () use ($app) {
-            if (! $app->resolved('queue.failer')) {
-                $app['queue.failer'] = $app[FailedJobProvider::class];
-            }
-        });
 
         $app['queue']->addConnector('sqs', function () use ($app) {
             Worker::$restartable = false;
@@ -180,9 +183,7 @@ class Cloud
             return $app[QueueConnector::class];
         });
 
-        $app['queue']->addConnector('database', function () use ($app) {
-            return $app[QueueConnector::class];
-        });
+        $app['queue']->addConnector('database', $app->factory(QueueConnector::class));
     }
 
     /**
@@ -217,5 +218,13 @@ class Cloud
         return $_ENV['LARAVEL_CLOUD_LOG_SOCKET'] ??
             $_SERVER['LARAVEL_CLOUD_LOG_SOCKET'] ??
                 'unix:///tmp/cloud-init.sock';
+    }
+
+    /**
+    * Determine if managted queues are active.
+    */
+    public static function managedQueuesAreActive(): bool
+    {
+        return ($_SERVER['LARAVEL_CLOUD_MANAGED_QUEUES'] ?? null) === '1';
     }
 }
