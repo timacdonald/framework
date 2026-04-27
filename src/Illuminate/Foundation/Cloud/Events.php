@@ -99,8 +99,8 @@ class Events
     }
 
     /**
-    * Ensure the socket is connected.
-    */
+     * Ensure the socket is connected.
+     */
     protected function ensureConnected(): void
     {
         if (! $this->connected()) {
@@ -109,8 +109,8 @@ class Events
     }
 
     /**
-    * Connect the socket.
-    */
+     * Connect the socket.
+     */
     protected function connect(): void
     {
         $socket = stream_socket_client(
@@ -126,7 +126,7 @@ class Events
         }
 
         if (! stream_set_timeout($socket, self::TIMEOUT)) {
-            $e = new RuntimeException($this->withSocketMetaData("Failed configuring socket timeout"));
+            $e = new RuntimeException($this->withSocketMetaData('Failed configuring socket timeout'));
 
             $this->disconnect();
 
@@ -137,8 +137,8 @@ class Events
     }
 
     /**
-    * Determine if the socket is connected.
-    */
+     * Determine if the socket is connected.
+     */
     protected function connected(): bool
     {
         if (gettype($this->socket) !== 'resource') {
@@ -155,8 +155,8 @@ class Events
     }
 
     /**
-    * Disconnect the socket.
-    */
+     * Disconnect the socket.
+     */
     protected function disconnect(): void
     {
         try {
@@ -169,8 +169,8 @@ class Events
     }
 
     /**
-    * Decorate the message with the socket's meta data.
-    */
+     * Decorate the message with the socket's meta data.
+     */
     protected function withSocketMetaData(string $message): string
     {
         $prefix = "{$message}\n---\n";
