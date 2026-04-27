@@ -28,6 +28,8 @@ class Events
      * Emit an event.
      *
      * @param  array<string, mixed>  $payload
+     *
+     * TODO: only accept a closure that we can rescue
      */
     public function emit(array $payload): void
     {

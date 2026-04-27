@@ -7,9 +7,12 @@ use Illuminate\Foundation\Bootstrap\BootProviders;
 use Illuminate\Foundation\Bootstrap\HandleExceptions;
 use Illuminate\Foundation\Bootstrap\LoadConfiguration;
 use Illuminate\Foundation\Cloud\Events;
+use Illuminate\Foundation\Cloud\FailedJobProvider;
+use Illuminate\Foundation\Cloud\Queue;
 use Illuminate\Foundation\Cloud\QueueConnector;
 use Illuminate\Queue\Connectors\DatabaseConnector;
 use Illuminate\Queue\Connectors\SqsConnector;
+use Illuminate\Queue\Failed\FailedJobProviderInterface;
 use Illuminate\Queue\Worker;
 use Monolog\Formatter\JsonFormatter;
 use Monolog\Handler\SocketHandler;
@@ -130,8 +133,6 @@ class Cloud
     public static function configureManagedQueues(Application $app): void
     {
         if (($_SERVER['LARAVEL_CLOUD_MANAGED_QUEUES'] ?? null) === '1') {
-            Worker::$restartable = false;
-
             $app['config']->set(
                 'queue.connections.sqs.credentials',
                 'ecs'
@@ -155,13 +156,32 @@ class Cloud
             return;
         }
 
-        $app['queue']->addConnector('sqs', function () {
-            return new QueueConnector(new SqsConnector, new Events);
+        $app->singleton(Events::class);
+
+        $app->singleton(QueueConnector::class, function ($app) {
+            // Temporary to allow testing locally with database driver.
+            $baseConnector = match($app['config']->get('queue.default')) {
+                'database' => new DatabaseConnector($app['db']),
+                default => new SqsConnector,
+            };
+
+            return new QueueConnector($baseConnector, $app['queue.failer'], $app[Events::class]);
         });
 
-        // Testing...
+        $app->beforeResolving('queue.failer', function () use ($app) {
+            if (! $app->resolved('queue.failer')) {
+                $app['queue.failer'] = new FailedJobProvider($app[Events::class]);
+            }
+        });
+
+        $app['queue']->addConnector('sqs', function () use ($app) {
+            Worker::$restartable = false;
+
+            return $app[QueueConnector::class];
+        });
+
         $app['queue']->addConnector('database', function () use ($app) {
-            return new QueueConnector(new DatabaseConnector($app['db']), new Events);
+            return $app[QueueConnector::class];
         });
     }
 

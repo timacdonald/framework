@@ -123,6 +123,7 @@ class Queue implements QueueContract, ClearableQueue
     {
         $this->beforeJobPushed();
 
+        // TODO tap
         $result = $this->queue->push(...func_get_args());
 
         $this->afterJobPushed($queue);
@@ -305,6 +306,18 @@ class Queue implements QueueContract, ClearableQueue
     }
 
     /**
+     * Last job details resolver.
+     *
+     * @return array{started_at: CarbonImmutable}
+     */
+    public function lastJobDetails()
+    {
+        return [
+            'started_at' => $this->lastJobStartedAt,
+        ];
+    }
+
+    /**
      * Handle before a job is pushed.
      *
      * @return void
@@ -340,7 +353,7 @@ class Queue implements QueueContract, ClearableQueue
             'queue' => $this->normalizeQueue($queue),
         ]));
 
-        $this->lastJobPushedAt = null;
+        $this->flush();
     }
 
     /**
@@ -354,13 +367,18 @@ class Queue implements QueueContract, ClearableQueue
             return;
         }
 
+        if ($this->processingJob->hasFailed()) {
+            $this->flush();
+
+            return;
+        }
+
         $now = CarbonImmutable::now('UTC');
 
         $this->events->emit([
             '_cloud_event' => 'queue',
             'timestamp' => $now->toDateTimeString('microsecond'),
             'type' => match (true) {
-                $this->processingJob->hasFailed() => 'failed',
                 $this->processingJob->isReleased() => 'released',
                 default => 'processed',
             },
@@ -368,7 +386,7 @@ class Queue implements QueueContract, ClearableQueue
             'duration_ms' => (int) $this->lastJobStartedAt->diffInMilliseconds($now),
         ]);
 
-        $this->processingQueue = $this->processingJob = $this->lastJobStartedAt = null;
+        $this->flush();
     }
 
     /**
@@ -385,7 +403,7 @@ class Queue implements QueueContract, ClearableQueue
         }
 
         $this->processingJob = $job;
-        $this->processingQueue = $this->normalizeQueue($queue);
+        $this->processingQueue = $queue;
         $this->lastJobStartedAt = CarbonImmutable::now('UTC');
 
         $this->events->emit([
@@ -429,5 +447,19 @@ class Queue implements QueueContract, ClearableQueue
     public function __call($method, $parameters)
     {
         return $this->forwardDecoratedCallTo($this->queue, $method, $parameters);
+    }
+
+    /**
+     * Flush the state.
+     *
+     * @return void
+     */
+    protected function flush()
+    {
+        $this->lastJobPushedAt
+            = $this->processingQueue
+            = $this->processingJob
+            = $this->lastJobStartedAt
+            = null;
     }
 }

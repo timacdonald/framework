@@ -8,6 +8,7 @@ class QueueConnector implements ConnectorInterface
 {
     public function __construct(
         protected ConnectorInterface $connector,
+        protected FailedJobProvider $failedJobProvider,
         protected Events $events,
     ) {
         //
