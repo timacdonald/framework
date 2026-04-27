@@ -4,7 +4,6 @@ namespace Illuminate\Foundation\Cloud;
 
 use Carbon\CarbonImmutable;
 use Illuminate\Queue\Failed\FailedJobProviderInterface;
-use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Str;
 
 class FailedJobProvider implements FailedJobProviderInterface
@@ -12,13 +11,12 @@ class FailedJobProvider implements FailedJobProviderInterface
     /**
      * The last job details resolver.
      *
-     * @var  (callable(): (array{total_attempts: int, started_at: CarbonImmutable}))  $processingJobDetailsResolver
-    */
+     * @var (callable(): (array{total_attempts: int, started_at: CarbonImmutable}))
+     */
     protected $processingJobDetailsResolver;
 
     /**
      * Create a new instance.
-     *
      */
     public function __construct(
         protected Events $events,
@@ -120,7 +118,7 @@ class FailedJobProvider implements FailedJobProviderInterface
      *
      * @param  (callable(): (array{total_attempts: int, started_at: CarbonImmutable}))  $processingJobDetailsResolver  $callback
      * @return $this
-    */
+     */
     public function setProcessingJobDetailsResolver(callable $callback)
     {
         $this->processingJobDetailsResolver = $callback;

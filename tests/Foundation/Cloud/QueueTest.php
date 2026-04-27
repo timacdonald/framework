@@ -7,6 +7,7 @@ use Illuminate\Foundation\Cloud\Events;
 use Illuminate\Foundation\Cloud\FailedJobProvider;
 use Illuminate\Foundation\Cloud\Queue;
 use Illuminate\Queue\Jobs\FakeJob;
+use Illuminate\Queue\SqsQueue;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 use Illuminate\Support\Testing\Fakes\QueueFake;
@@ -14,7 +15,7 @@ use Orchestra\Testbench\TestCase;
 use Ramsey\Uuid\Uuid;
 use RuntimeException;
 
-class SqsQueueTest extends TestCase
+class QueueTest extends TestCase
 {
     protected function setUp(): void
     {
@@ -41,11 +42,11 @@ class SqsQueueTest extends TestCase
 
     public function testItDoesNotBindWhenManagedQueuesIsInactive()
     {
-        unset($_SERVER['LARAVEL_CLOUD_MANAGED_QUEUE']);
+        unset($_SERVER['LARAVEL_CLOUD_MANAGED_QUEUES']);
 
         Cloud::bootManagedQueues($this->app);
 
-        $this->assertInstanceOf(Queue::class, $this->app['queue']->connection('sqs'));
+        $this->assertInstanceOf(SqsQueue::class, $this->app['queue']->connection('sqs'));
     }
 
     public function testItDoesNotEmitEventsWhilePoppingWhenNoJobsAreProcessingAndNoJobsAreAvailableToPop()

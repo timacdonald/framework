@@ -42,6 +42,10 @@ class Events
      */
     public function emitMany(array $payloads): void
     {
+        if ($payloads === []) {
+            return;
+        }
+
         try {
             $this->ensureConnected();
 
@@ -60,6 +64,7 @@ class Events
     {
         $originalPayloadLength = strlen($payload);
         $written = 0;
+        $zeroWriteAttempts = 0;
 
         while (true) {
             $thisWrite = @fwrite($this->socket, $payload);
@@ -76,6 +81,18 @@ class Events
 
             if ($written >= $originalPayloadLength) {
                 return;
+            }
+
+            if ($thisWrite === 0) {
+                $zeroWriteAttempts++;
+            }
+
+            if ($zeroWriteAttempts >= 5) {
+                $e = new RuntimeException($this->withSocketMetaData('Unable to write bytes to socket'));
+
+                $this->disconnect();
+
+                throw $e;
             }
 
             $payload = substr($payload, $thisWrite);
@@ -175,7 +192,7 @@ class Events
     {
         $prefix = "{$message}\n---\n";
 
-        if ($this->connected()) {
+        if (! $this->connected()) {
             return "{$prefix}closed: true";
         }
 

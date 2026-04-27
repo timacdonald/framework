@@ -41,13 +41,6 @@ class Queue implements QueueContract, ClearableQueue
     protected $processingJobStartedAt = null;
 
     /**
-     * The cache of normalized queue names.
-     *
-     * @var list<string>
-     */
-    protected $normalizedQueueCache = [];
-
-    /**
      * Create a new Queue instance.
      */
     public function __construct(
@@ -329,7 +322,7 @@ class Queue implements QueueContract, ClearableQueue
     }
 
     /**
-     * Handle before a job is pushed.
+     * Handle after a job is pushed.
      *
      * @param  string|null  $queue
      * @return void
@@ -423,11 +416,7 @@ class Queue implements QueueContract, ClearableQueue
      */
     protected function normalizeQueue($queue)
     {
-        if (array_key_exists($queue ?? '', $this->normalizedQueueCache)) {
-            return $this->normalizedQueueCache[$queue];
-        }
-
-        return $this->normalizedQueueCache[$queue] = Str::of($this->queue->getQueue($queue))
+        return Str::of($this->queue->getQueue($queue))
             ->chopStart($_SERVER['SQS_PREFIX'].'/')
             ->chopEnd($_SERVER['SQS_SUFFIX'])
             ->toString();

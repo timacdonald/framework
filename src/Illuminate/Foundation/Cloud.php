@@ -8,11 +8,9 @@ use Illuminate\Foundation\Bootstrap\HandleExceptions;
 use Illuminate\Foundation\Bootstrap\LoadConfiguration;
 use Illuminate\Foundation\Cloud\Events;
 use Illuminate\Foundation\Cloud\FailedJobProvider;
-use Illuminate\Foundation\Cloud\Queue;
 use Illuminate\Foundation\Cloud\QueueConnector;
 use Illuminate\Queue\Connectors\DatabaseConnector;
 use Illuminate\Queue\Connectors\SqsConnector;
-use Illuminate\Queue\Failed\FailedJobProviderInterface;
 use Illuminate\Queue\Worker;
 use Monolog\Formatter\JsonFormatter;
 use Monolog\Handler\SocketHandler;
@@ -158,6 +156,7 @@ class Cloud
 
         $app->singleton(Events::class);
 
+        unset($app['queue.failer']);
         $app->beforeResolving('queue.failer', function () use ($app) {
             if (! $app->resolved('queue.failer')) {
                 $app['queue.failer'] = $app[FailedJobProvider::class];
@@ -173,7 +172,6 @@ class Cloud
 
             return new QueueConnector($baseConnector, $app['queue.failer'], $app[Events::class]);
         });
-
 
         $app['queue']->addConnector('sqs', function () use ($app) {
             Worker::$restartable = false;
@@ -219,8 +217,8 @@ class Cloud
     }
 
     /**
-    * Determine if managted queues are active.
-    */
+     * Determine if managed queues are active.
+     */
     public static function managedQueuesAreActive(): bool
     {
         return ($_SERVER['LARAVEL_CLOUD_MANAGED_QUEUES'] ?? null) === '1';
