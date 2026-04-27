@@ -438,7 +438,7 @@ class Queue implements QueueContract, ClearableQueue
     }
 
     /**
-     * Dynamically pass method calls to the underlying dispatcher.
+     * Dynamically pass method calls to the underlying queue.
      *
      * @param  string  $method
      * @param  array  $parameters
