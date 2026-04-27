@@ -37,7 +37,7 @@ class FailedJobProvider implements FailedJobProviderInterface
      */
     public function log($connection, $queue, $payload, $exception)
     {
-        $now = CarbonImmutable::now();
+        $now = CarbonImmutable::now('UTC');
         $lastJobDetails = call_user_func($this->lastJobDetailsResolver);
 
         $this->events->emit([
