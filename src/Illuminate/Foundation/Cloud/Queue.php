@@ -438,18 +438,6 @@ class Queue implements QueueContract, ClearableQueue
     }
 
     /**
-     * Dynamically pass method calls to the underlying queue.
-     *
-     * @param  string  $method
-     * @param  array  $parameters
-     * @return mixed
-     */
-    public function __call($method, $parameters)
-    {
-        return $this->forwardDecoratedCallTo($this->queue, $method, $parameters);
-    }
-
-    /**
      * Flush the state.
      *
      * @return void
@@ -461,5 +449,17 @@ class Queue implements QueueContract, ClearableQueue
             = $this->processingJob
             = $this->processingJobStartedAt
             = null;
+    }
+
+    /**
+     * Dynamically pass method calls to the underlying queue.
+     *
+     * @param  string  $method
+     * @param  array  $parameters
+     * @return mixed
+     */
+    public function __call($method, $parameters)
+    {
+        return $this->forwardDecoratedCallTo($this->queue, $method, $parameters);
     }
 }
