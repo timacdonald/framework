@@ -4,11 +4,15 @@ namespace Tests\Tests\Foundation;
 
 use Illuminate\Foundation\Cloud;
 use Illuminate\Foundation\Cloud\Events;
+use Illuminate\Foundation\Cloud\FailedJobProvider;
 use Illuminate\Foundation\Cloud\Queue;
 use Illuminate\Queue\Jobs\FakeJob;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Str;
 use Illuminate\Support\Testing\Fakes\QueueFake;
 use Orchestra\Testbench\TestCase;
+use Ramsey\Uuid\Uuid;
+use RuntimeException;
 
 class SqsQueueTest extends TestCase
 {
@@ -155,7 +159,7 @@ class SqsQueueTest extends TestCase
                 'type' => 'processed',
                 'queue' => 'second',
                 'duration_ms' => 0,
-            ]
+            ],
         ], $eventsFake->emitted);
     }
 
@@ -165,12 +169,19 @@ class SqsQueueTest extends TestCase
         $eventsFake = $this->fakeEvents();
         $queueFake = $this->fakeQueue();
         $queue = new Queue($queueFake, $eventsFake);
+        $failedJobProvider = new FailedJobProvider($eventsFake);
+        $failedJobProvider->setProcessingJobDetailsResolver($queue->processingJobDetails(...));
+        $this->app[FailedJobProvider::class] = $failedJobProvider;
 
         $queueFake->jobsToPop[] = $jobFake = new FakeJob;
         $queue->pop();
         $jobFake->fail();
+        Str::createUuidsUsingSequence([Uuid::fromString('00dc709e-90c4-70c2-87c8-9b7127d20e8f')]);
+        $failedJobProvider->log('sqs', 'default', ['payload' => 'here'], new RuntimeException('Whoops!'));
+        Str::createUuidsNormally();
         $queue->pop();
 
+        unset($eventsFake->emitted[1]['exception']);
         $this->assertSame([
             [
                 '_cloud_event' => 'queue',
@@ -179,12 +190,22 @@ class SqsQueueTest extends TestCase
                 'queue' => 'default',
             ],
             [
+                '_cloud_event' => 'failed_job',
+                'id' => '00dc709e-90c4-70c2-87c8-9b7127d20e8f',
+                'queue' => 'default',
+                'started_at' => '2000-01-02 03:04:05.060708',
+                'total_attempts' => 1,
+                'payload' => [
+                    'payload' => 'here',
+                ],
+            ],
+            [
                 '_cloud_event' => 'queue',
                 'timestamp' => '2000-01-02 03:04:05.060708',
                 'type' => 'failed',
                 'queue' => 'default',
                 'duration_ms' => 0,
-            ]
+            ],
         ], $eventsFake->emitted);
     }
 
@@ -213,7 +234,7 @@ class SqsQueueTest extends TestCase
                 'type' => 'released',
                 'queue' => 'default',
                 'duration_ms' => 0,
-            ]
+            ],
         ], $eventsFake->emitted);
     }
 
@@ -256,7 +277,7 @@ class SqsQueueTest extends TestCase
                 'type' => 'queued',
                 'queue' => '4',
             ],
-                [
+            [
                 '_cloud_event' => 'queue',
                 'timestamp' => '2000-01-02 03:04:05.060708',
                 'type' => 'queued',
@@ -273,7 +294,7 @@ class SqsQueueTest extends TestCase
                 'timestamp' => '2000-01-02 03:04:05.060708',
                 'type' => 'queued',
                 'queue' => '6',
-            ]
+            ],
         ], $eventsFake->emitted);
     }
 
@@ -341,7 +362,8 @@ class SqsQueueTest extends TestCase
 
     private function fakeEvents()
     {
-        return new class extends Events {
+        return new class extends Events
+        {
             public array $emitted = [];
 
             public function emitMany(array $payloads): void
@@ -356,7 +378,8 @@ class SqsQueueTest extends TestCase
 
     private function fakeQueue()
     {
-        return new class ($this->app, [], null) extends QueueFake {
+        return new class($this->app, [], null) extends QueueFake
+        {
             public array $jobsToPop = [];
 
             public function pop($queue = null)

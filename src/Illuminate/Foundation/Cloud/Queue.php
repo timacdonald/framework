@@ -404,7 +404,7 @@ class Queue implements QueueContract, ClearableQueue
         }
 
         $this->processingJob = $job;
-        $this->processingQueue = $queue;
+        $this->processingQueue = $this->normalizeQueue($queue);
         $this->processingJobStartedAt = CarbonImmutable::now('UTC');
 
         $this->events->emit([
@@ -428,7 +428,7 @@ class Queue implements QueueContract, ClearableQueue
         }
 
         return $this->normalizedQueueCache[$queue] = Str::of($this->queue->getQueue($queue))
-            ->chopStart($_SERVER['SQS_PREFIX'])
+            ->chopStart($_SERVER['SQS_PREFIX'].'/')
             ->chopEnd($_SERVER['SQS_SUFFIX'])
             ->toString();
     }

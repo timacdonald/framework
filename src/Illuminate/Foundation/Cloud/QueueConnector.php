@@ -22,6 +22,6 @@ class QueueConnector implements ConnectorInterface
             $queue->processingJobDetails(...)
         );
 
-        return $queue
+        return $queue;
     }
 }

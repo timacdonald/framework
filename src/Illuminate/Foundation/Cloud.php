@@ -170,7 +170,7 @@ class Cloud
 
         $app->beforeResolving('queue.failer', function () use ($app) {
             if (! $app->resolved('queue.failer')) {
-                $app['queue.failer'] = new FailedJobProvider($app[Events::class]);
+                $app['queue.failer'] = $app[FailedJobProvider::class];
             }
         });
 
