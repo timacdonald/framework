@@ -33,8 +33,6 @@ class Cloud
      */
     public static function bootstrapperBootstrapped(Application $app, string $bootstrapper): void
     {
-        // TODO bind events as singleton
-
         (match ($bootstrapper) {
             LoadConfiguration::class => function () use ($app) {
                 static::configureDisks($app);
