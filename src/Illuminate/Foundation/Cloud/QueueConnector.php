@@ -16,6 +16,8 @@ class QueueConnector implements ConnectorInterface
 
     public function connect(array $config)
     {
-        return new Queue($this->connector->connect($config), $this->events);
+        return tap(new Queue($this->connector->connect($config), $this->events),function ($queue) {
+            $this->failedJobProvider->setLastJobDetailsResolver($queue->lastJobDetails(...));
+        });
     }
 }

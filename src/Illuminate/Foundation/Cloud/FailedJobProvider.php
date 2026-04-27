@@ -12,7 +12,7 @@ class FailedJobProvider implements FailedJobProviderInterface
     /**
      * The last job details resolver.
      *
-     * @var  (callable(): (array{started_at: CarbonImmutable}))  $lastJobDetailsResolver
+     * @var  (callable(): (array{total_attempts: int, started_at: CarbonImmutable}))  $lastJobDetailsResolver
     */
     protected $lastJobDetailsResolver;
 
@@ -45,6 +45,7 @@ class FailedJobProvider implements FailedJobProviderInterface
             'id' => $id = Str::uuid7($now)->toString(),
             'queue' => $queue,
             'started_at' => $lastJobDetails['started_at']->toDateTimeString('microsecond'),
+            'total_attempts' => $lastJobDetails['total_attempts'],
             'payload' => $payload,
             'exception' => (string) mb_convert_encoding($exception, 'UTF-8'),
         ]);
@@ -121,7 +122,7 @@ class FailedJobProvider implements FailedJobProviderInterface
     /**
      * Set the last job details resolver.
      *
-     * @param  (callable(): (array{started_at: CarbonImmutable}))  $lastJobDetailsResolver  $callback
+     * @param  (callable(): (array{total_attempts: int, started_at: CarbonImmutable}))  $lastJobDetailsResolver  $callback
      * @return $this
     */
     public function setLastJobDetailsResolver(callable $callback)
