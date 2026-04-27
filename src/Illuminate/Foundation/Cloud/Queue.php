@@ -123,7 +123,6 @@ class Queue implements QueueContract, ClearableQueue
     {
         $this->beforeJobPushed();
 
-        // TODO tap
         $result = $this->queue->push(...func_get_args());
 
         $this->afterJobPushed($queue);
