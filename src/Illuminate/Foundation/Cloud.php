@@ -203,11 +203,16 @@ class Cloud
                 'includeStacktraces' => true,
             ],
             'with' => [
-                'connectionString' => $_ENV['LARAVEL_CLOUD_LOG_SOCKET'] ??
-                                      $_SERVER['LARAVEL_CLOUD_LOG_SOCKET'] ??
-                                      'unix:///tmp/cloud-init.sock',
+                'connectionString' => Cloud::socket(),
                 'persistent' => true,
             ],
         ]);
+    }
+
+    public static function socket(): string
+    {
+        return $_ENV['LARAVEL_CLOUD_LOG_SOCKET'] ??
+            $_SERVER['LARAVEL_CLOUD_LOG_SOCKET'] ??
+                'unix:///tmp/cloud-init.sock';
     }
 }

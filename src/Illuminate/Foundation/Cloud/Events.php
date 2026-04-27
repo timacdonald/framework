@@ -2,6 +2,7 @@
 
 namespace Illuminate\Foundation\Cloud;
 
+use Illuminate\Foundation\Cloud;
 use RuntimeException;
 use Throwable;
 
@@ -113,7 +114,7 @@ class Events
     protected function connect(): void
     {
         $socket = stream_socket_client(
-            address: $_ENV['LARAVEL_CLOUD_LOG_SOCKET'] ?? $_SERVER['LARAVEL_CLOUD_LOG_SOCKET'] ?? 'unix:///tmp/cloud-init.sock',
+            address: Cloud::socket(),
             error_code: $errorCode,
             error_message: $errorMessage,
             timeout: self::CONNECTION_TIMEOUT,
