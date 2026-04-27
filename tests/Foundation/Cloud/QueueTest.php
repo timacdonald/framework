@@ -195,7 +195,7 @@ class QueueTest extends TestCase
                 'id' => '00dc709e-90c4-70c2-87c8-9b7127d20e8f',
                 'queue' => 'default',
                 'started_at' => '2000-01-02 03:04:05.060708',
-                'total_attempts' => 1,
+                'attempts' => 1,
                 'payload' => [
                     'payload' => 'here',
                 ],

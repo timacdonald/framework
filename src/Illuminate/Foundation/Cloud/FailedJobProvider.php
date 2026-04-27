@@ -11,7 +11,7 @@ class FailedJobProvider implements FailedJobProviderInterface
     /**
      * The last job details resolver.
      *
-     * @var (callable(): (array{total_attempts: int, started_at: CarbonImmutable}))
+     * @var (callable(): (array{queue: string, attempts: int, started_at: CarbonImmutable}))
      */
     protected $processingJobDetailsResolver;
 
@@ -41,9 +41,9 @@ class FailedJobProvider implements FailedJobProviderInterface
         $this->events->emit([
             '_cloud_event' => 'failed_job',
             'id' => $id = Str::uuid7($now)->toString(),
-            'queue' => $queue,
+            'queue' => $processingJobDetails['queue'],
             'started_at' => $processingJobDetails['started_at']->toDateTimeString('microsecond'),
-            'total_attempts' => $processingJobDetails['total_attempts'],
+            'attempts' => $processingJobDetails['attempts'],
             'payload' => $payload,
             'exception' => (string) mb_convert_encoding($exception, 'UTF-8'),
         ]);
@@ -52,7 +52,7 @@ class FailedJobProvider implements FailedJobProviderInterface
             '_cloud_event' => 'queue',
             'timestamp' => $now->toDateTimeString('microsecond'),
             'type' => 'failed',
-            'queue' => $queue,
+            'queue' => $processingJobDetails['queue'],
             'duration_ms' => (int) $processingJobDetails['started_at']->diffInMilliseconds($now),
         ]);
 
@@ -116,7 +116,7 @@ class FailedJobProvider implements FailedJobProviderInterface
     /**
      * Set the last job details resolver.
      *
-     * @param  (callable(): (array{total_attempts: int, started_at: CarbonImmutable}))  $processingJobDetailsResolver  $callback
+     * @param  (callable(): (array{queue: string, attempts: int, started_at: CarbonImmutable}))  $processingJobDetailsResolver  $callback
      * @return $this
      */
     public function setProcessingJobDetailsResolver(callable $callback)

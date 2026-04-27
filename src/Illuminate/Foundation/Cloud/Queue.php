@@ -301,12 +301,13 @@ class Queue implements QueueContract, ClearableQueue
     /**
      * Last job details resolver.
      *
-     * @return array{total_attempts: int, started_at: CarbonImmutable}
+     * @return array{queue: string, attempts: int, started_at: CarbonImmutable}
      */
     public function processingJobDetails()
     {
         return [
-            'total_attempts' => $this->processingJob->attempts(),
+            'queue' => $this->processingQueue,
+            'attempts' => $this->processingJob->attempts(),
             'started_at' => $this->processingJobStartedAt,
         ];
     }
