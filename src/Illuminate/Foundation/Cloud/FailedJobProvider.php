@@ -69,7 +69,6 @@ class FailedJobProvider implements FailedJobProviderInterface
      */
     public function ids($queue = null)
     {
-        // Not implemented.
         return [];
     }
 
@@ -80,7 +79,6 @@ class FailedJobProvider implements FailedJobProviderInterface
      */
     public function all()
     {
-        // Not implemented.
         return [];
     }
 
@@ -92,7 +90,6 @@ class FailedJobProvider implements FailedJobProviderInterface
      */
     public function find($id)
     {
-        // Not implemented.
         return null;
     }
 
@@ -104,7 +101,6 @@ class FailedJobProvider implements FailedJobProviderInterface
      */
     public function forget($id)
     {
-        // Not implemented.
         return false;
     }
 
@@ -116,7 +112,7 @@ class FailedJobProvider implements FailedJobProviderInterface
      */
     public function flush($hours = null)
     {
-        // Not implemented.
+        //
     }
 
     /**
