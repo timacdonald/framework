@@ -209,6 +209,9 @@ class Cloud
         ]);
     }
 
+    /**
+     * The cloud socket address.
+     */
     public static function socket(): string
     {
         return $_ENV['LARAVEL_CLOUD_LOG_SOCKET'] ??
