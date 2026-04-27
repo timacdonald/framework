@@ -23,7 +23,7 @@ class Queue implements QueueContract, ClearableQueue
      *
      * @var string|null
      */
-    protected $processingQueue;
+    protected $processingQueue = null;
 
     /**
      * The date the last job was pushed.
