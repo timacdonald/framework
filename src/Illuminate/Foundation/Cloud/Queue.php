@@ -228,11 +228,11 @@ class Queue implements QueueContract, ClearableQueue
      */
     public function pop($queue = null)
     {
-        $this->beforeJobPopped();
+        $this->finishProcessingJob();
 
         $job = $this->queue->pop(...func_get_args());
 
-        $this->afterJobPopped($queue, $job);
+        $this->startProcessingJob($queue, $job);
 
         return $job;
     }
@@ -317,7 +317,7 @@ class Queue implements QueueContract, ClearableQueue
      */
     public function onWorkerStopping()
     {
-        $this->beforeJobPopped();
+        $this->finishProcessingJob(type: 'released');
     }
 
     /**
@@ -366,13 +366,16 @@ class Queue implements QueueContract, ClearableQueue
      */
     protected function beforeJobPopped()
     {
+        $this->finishProcessingJob();
+    }
+
+    protected function finishProcessingJob($type = null)
+    {
         if (! $this->processingJob) {
             return;
         }
 
         if ($this->processingJob->hasFailed()) {
-            $this->flush();
-
             return;
         }
 
@@ -381,15 +384,13 @@ class Queue implements QueueContract, ClearableQueue
         $this->events->emit([
             '_cloud_event' => 'queue',
             'timestamp' => $now->toDateTimeString('microsecond'),
-            'type' => match (true) {
+            'type' => $type ?? match (true) {
                 $this->processingJob->isReleased() => 'released',
                 default => 'processed',
             },
             'queue' => $this->processingQueue,
             'duration_ms' => (int) $this->processingJobStartedAt->diffInMilliseconds($now),
         ]);
-
-        $this->flush();
     }
 
     /**
@@ -399,7 +400,7 @@ class Queue implements QueueContract, ClearableQueue
      * @param  \Illuminate\Contracts\Queue\Job|null  $job
      * @return void
      */
-    protected function afterJobPopped($queue, $job)
+    protected function startProcessingJob($queue, $job)
     {
         if (! $job) {
             return;

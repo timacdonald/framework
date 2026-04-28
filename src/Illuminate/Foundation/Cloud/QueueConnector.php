@@ -7,7 +7,6 @@ use Illuminate\Contracts\Queue\Queue as QueueContract;
 use Illuminate\Queue\Connectors\ConnectorInterface;
 use Illuminate\Queue\Events\WorkerStopping;
 use Illuminate\Queue\Worker;
-use Illuminate\Queue\WorkerStopReason;
 
 class QueueConnector implements ConnectorInterface
 {
@@ -41,10 +40,7 @@ class QueueConnector implements ConnectorInterface
     {
         Worker::$restartable = false;
 
-        /* $this->app['events']->listen(fn (WorkerStopping $event) => match ($event->reason) { */
-        /*     WorkerStopReason::TimedOut => $this->app['queue.failer']->onJobTimeout(), */
-        /*     default => $queue->onWorkerStopping(), */
-        /* }); */
+        $this->app['events']->listen(WorkerStopping::class, $queue->onWorkerStopping(...));
     }
 
     /**

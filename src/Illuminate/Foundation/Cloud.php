@@ -161,15 +161,15 @@ class Cloud
         $app['queue']->addConnector('sqs', $app->factory(QueueConnector::class));
         $app['queue']->addConnector('database', $app->factory(QueueConnector::class));
 
-        // Temporary to allow testing locally with database driver...
-        /* $app->singleton(QueueConnector::class, function ($app) { */
-        /*     $connector = match($app['config']->get('queue.default')) { */
-        /*         'database' => new DatabaseConnector($app['db']), */
-        /*         default => new SqsConnector, */
-        /*     }; */
-        /**/
-        /*     return new QueueConnector($connector, $app); */
-        /* }); */
+        /* Temporary to allow testing locally with database driver... */
+        $app->singleton(QueueConnector::class, function ($app) {
+            $connector = match($app['config']->get('queue.default')) {
+                'database' => new DatabaseConnector($app['db']),
+                default => new SqsConnector,
+            };
+
+            return new QueueConnector($connector, $app);
+        });
     }
 
     /**
