@@ -9,14 +9,16 @@ $socket = stream_socket_server(
 );
 
 $connections = [];
+$connectionIndex = 0;
 
-$check = function () use (&$connections, &$socket) {
+$check = function () use (&$connections, &$socket, &$connectionIndex) {
     $connection = @stream_socket_accept($socket, 0);
 
     if ($connection) {
         stream_set_blocking($connection, false);
-        $connections[] = $connection;
-        echo '>>>>> New connection established. Current connection count: '.count($connections).PHP_EOL;
+        $connections[$connectionIndex] = $connection;
+        echo ">>> Connection [$connectionIndex] established.".PHP_EOL;
+        $connectionIndex++;
     }
 };
 
@@ -24,6 +26,14 @@ while (true) {
     $check();
 
     foreach ($connections as $index => $connection) {
+        if (feof($connection)) {
+            fclose($connection);
+            echo "<<< Connection [{$id}] closed.".PHP_EOL;
+
+            unset($connections[$index]);
+
+            continue;
+        }
         $id = $index + 1;
         while ($message = fgets($connection)) {
             echo "Connection [{$id}]: ".$message;
