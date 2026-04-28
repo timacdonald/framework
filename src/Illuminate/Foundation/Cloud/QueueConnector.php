@@ -41,10 +41,10 @@ class QueueConnector implements ConnectorInterface
     {
         Worker::$restartable = false;
 
-        $this->app['events']->listen(fn (WorkerStopping $event) => match ($event->reason) {
-            WorkerStopReason::TimedOut => $this->app['queue.failer']->onJobTimeout(),
-            default => $queue->onWorkerStopping(),
-        });
+        /* $this->app['events']->listen(fn (WorkerStopping $event) => match ($event->reason) { */
+        /*     WorkerStopReason::TimedOut => $this->app['queue.failer']->onJobTimeout(), */
+        /*     default => $queue->onWorkerStopping(), */
+        /* }); */
     }
 
     /**
