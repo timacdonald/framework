@@ -60,6 +60,25 @@ class FailedJobProvider implements FailedJobProviderInterface
     }
 
     /**
+     * Handle a job timing out.
+     *
+     * @return void
+     */
+    public function onJobTimeout()
+    {
+        $now = CarbonImmutable::now('UTC');
+        $processingJobDetails = call_user_func($this->processingJobDetailsResolver);
+
+        $this->events->emit([
+            '_cloud_event' => 'queue',
+            'timestamp' => $now->toDateTimeString('microsecond'),
+            'type' => 'failed',
+            'queue' => $processingJobDetails['queue'],
+            'duration_ms' => (int) $processingJobDetails['started_at']->diffInMilliseconds($now),
+        ]);
+    }
+
+    /**
      * Get the IDs of all of the failed jobs.
      *
      * @param  string|null  $queue
