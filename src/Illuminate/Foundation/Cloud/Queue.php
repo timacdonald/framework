@@ -313,6 +313,14 @@ class Queue implements QueueContract, ClearableQueue
     }
 
     /**
+     * Handle the worker stopping.
+     */
+    public function onWorkerStopping()
+    {
+        $this->beforeJobPopped();
+    }
+
+    /**
      * Handle before a job is pushed.
      *
      * @return void

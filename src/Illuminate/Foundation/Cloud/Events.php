@@ -51,7 +51,7 @@ class Events
 
             $this->write($this->format($payloads));
         } catch (Throwable $e) {
-            // TODO $e
+            //
         }
     }
 
@@ -176,6 +176,12 @@ class Events
      */
     protected function disconnect(): void
     {
+        if (gettype($this->socket) !== 'resource') {
+            $this->socket = null;
+
+            return;
+        }
+
         try {
             fclose($this->socket);
         } catch (Throwable) {

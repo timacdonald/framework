@@ -8,9 +8,11 @@ use Illuminate\Foundation\Bootstrap\HandleExceptions;
 use Illuminate\Foundation\Bootstrap\LoadConfiguration;
 use Illuminate\Foundation\Cloud\Events;
 use Illuminate\Foundation\Cloud\FailedJobProvider;
+use Illuminate\Foundation\Cloud\Queue;
 use Illuminate\Foundation\Cloud\QueueConnector;
 use Illuminate\Queue\Connectors\DatabaseConnector;
 use Illuminate\Queue\Connectors\SqsConnector;
+use Illuminate\Queue\Events\WorkerStopping;
 use Illuminate\Queue\Worker;
 use Monolog\Formatter\JsonFormatter;
 use Monolog\Handler\SocketHandler;
@@ -155,31 +157,19 @@ class Cloud
         }
 
         $app->singleton(Events::class);
-
-        unset($app['queue.failer']);
-        $app->beforeResolving('queue.failer', function () use ($app) {
-            if (! $app->resolved('queue.failer')) {
-                $app['queue.failer'] = $app[FailedJobProvider::class];
-            }
-        });
-
-        $app->singleton(QueueConnector::class, function ($app) {
-            // Temporary to allow testing locally with database driver.
-            $baseConnector = match($app['config']->get('queue.default')) {
-                'database' => new DatabaseConnector($app['db']),
-                default => new SqsConnector,
-            };
-
-            return new QueueConnector($baseConnector, $app['queue.failer'], $app[Events::class]);
-        });
-
-        $app['queue']->addConnector('sqs', function () use ($app) {
-            Worker::$restartable = false;
-
-            return $app[QueueConnector::class];
-        });
-
+        $app->bind(QueueConnector::class, fn ($app) => new QueueConnector(new SqsConnector, $app));
+        $app['queue']->addConnector('sqs', $app->factory(QueueConnector::class));
         $app['queue']->addConnector('database', $app->factory(QueueConnector::class));
+
+        // Temporary to allow testing locally with database driver...
+        /* $app->singleton(QueueConnector::class, function ($app) { */
+        /*     $connector = match($app['config']->get('queue.default')) { */
+        /*         'database' => new DatabaseConnector($app['db']), */
+        /*         default => new SqsConnector, */
+        /*     }; */
+        /**/
+        /*     return new QueueConnector($connector, $app); */
+        /* }); */
     }
 
     /**
