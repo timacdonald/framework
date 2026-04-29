@@ -66,6 +66,7 @@ class FailedJobProvider implements FailedJobProviderInterface
      */
     public function onJobTimeout()
     {
+        // delete this?
         $now = CarbonImmutable::now('UTC');
         $processingJobDetails = call_user_func($this->processingJobDetailsResolver);
 
