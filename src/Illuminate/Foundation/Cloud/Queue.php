@@ -5,6 +5,7 @@ namespace Illuminate\Foundation\Cloud;
 use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Queue\ClearableQueue;
 use Illuminate\Contracts\Queue\Queue as QueueContract;
+use Illuminate\Queue\WorkerStopReason;
 use Illuminate\Support\Str;
 use Illuminate\Support\Traits\ForwardsCalls;
 
@@ -313,14 +314,6 @@ class Queue implements QueueContract, ClearableQueue
     }
 
     /**
-     * Handle the worker stopping.
-     */
-    public function onWorkerStopping()
-    {
-        $this->finishProcessingJob(type: 'released');
-    }
-
-    /**
      * Handle before a job is pushed.
      *
      * @return void
@@ -359,17 +352,7 @@ class Queue implements QueueContract, ClearableQueue
         $this->flush();
     }
 
-    /**
-     * Handle a job about to be popped.
-     *
-     * @return void
-     */
-    protected function beforeJobPopped()
-    {
-        $this->finishProcessingJob();
-    }
-
-    protected function finishProcessingJob($type = null)
+    public function finishProcessingJob($type = null)
     {
         if (! $this->processingJob) {
             return;
