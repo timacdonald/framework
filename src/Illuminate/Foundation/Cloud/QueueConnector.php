@@ -42,8 +42,8 @@ class QueueConnector implements ConnectorInterface
         Worker::$restartable = false;
 
         $this->app['events']->listen(fn (WorkerStopping $event) => match ($event->reason) {
-            WorkerStopReason::TimedOut => $queue->finishProcessingJob('released'),
-            default => $queue->finishProcessingJob('processed'),
+            WorkerStopReason::TimedOut => $queue->finishProcessingJob(as: 'released'),
+            default => $queue->finishProcessingJob(as: 'processed'),
         });
     }
 

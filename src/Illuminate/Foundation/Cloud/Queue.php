@@ -352,13 +352,15 @@ class Queue implements QueueContract, ClearableQueue
         $this->flush();
     }
 
-    public function finishProcessingJob($type = null)
+    public function finishProcessingJob($as = null)
     {
         if (! $this->processingJob) {
             return;
         }
 
         if ($this->processingJob->hasFailed()) {
+            $this->flush();
+
             return;
         }
 
@@ -367,13 +369,15 @@ class Queue implements QueueContract, ClearableQueue
         $this->events->emit([
             '_cloud_event' => 'queue',
             'timestamp' => $now->toDateTimeString('microsecond'),
-            'type' => $type ?? match (true) {
+            'type' => $as ?? match (true) {
                 $this->processingJob->isReleased() => 'released',
-                $this->processingJob->isDeletedOrReleased() => 'processed',
+                default => 'processed',
             },
             'queue' => $this->processingQueue,
             'duration_ms' => (int) $this->processingJobStartedAt->diffInMilliseconds($now),
         ]);
+
+        $this->flush();
     }
 
     /**
