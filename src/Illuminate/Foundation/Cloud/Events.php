@@ -51,6 +51,8 @@ class Events
 
             $this->write($this->format($payloads));
         } catch (Throwable $e) {
+            // TEMP
+            report($e);
             //
         }
     }

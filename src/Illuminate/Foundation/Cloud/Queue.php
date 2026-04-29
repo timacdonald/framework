@@ -369,7 +369,7 @@ class Queue implements QueueContract, ClearableQueue
             'timestamp' => $now->toDateTimeString('microsecond'),
             'type' => $type ?? match (true) {
                 $this->processingJob->isReleased() => 'released',
-                default => 'processed',
+                $this->processingJob->isDeletedOrReleased() => 'processed',
             },
             'queue' => $this->processingQueue,
             'duration_ms' => (int) $this->processingJobStartedAt->diffInMilliseconds($now),
