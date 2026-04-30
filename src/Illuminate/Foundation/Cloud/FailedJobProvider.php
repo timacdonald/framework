@@ -9,17 +9,11 @@ use Illuminate\Support\Str;
 class FailedJobProvider implements FailedJobProviderInterface
 {
     /**
-     * The last job details resolver.
-     *
-     * @var (callable(): (array{queue: string, attempts: int, started_at: CarbonImmutable}))
-     */
-    protected $processingJobDetailsResolver;
-
-    /**
      * Create a new instance.
      */
     public function __construct(
         protected Events $events,
+        protected Queue $queue,
     ) {
         //
     }
@@ -35,12 +29,12 @@ class FailedJobProvider implements FailedJobProviderInterface
      */
     public function log($connection, $queue, $payload, $exception)
     {
-        $now = CarbonImmutable::now('UTC');
-        $processingJobDetails = call_user_func($this->processingJobDetailsResolver);
+        $timestamp = CarbonImmutable::now('UTC');
+        $processingJobDetails = $this->queue->processingJobDetails();
 
         $this->events->emit([
             '_cloud_event' => 'failed_job',
-            'id' => $id = Str::uuid7($now)->toString(),
+            'id' => $id = Str::uuid7($timestamp)->toString(),
             'queue' => $processingJobDetails['queue'],
             'started_at' => $processingJobDetails['started_at']->toDateTimeString('microsecond'),
             'attempts' => $processingJobDetails['attempts'],
@@ -48,35 +42,9 @@ class FailedJobProvider implements FailedJobProviderInterface
             'exception' => (string) mb_convert_encoding($exception, 'UTF-8'),
         ]);
 
-        $this->events->emit([
-            '_cloud_event' => 'queue',
-            'timestamp' => $now->toDateTimeString('microsecond'),
-            'type' => 'failed',
-            'queue' => $processingJobDetails['queue'],
-            'duration_ms' => (int) $processingJobDetails['started_at']->diffInMilliseconds($now),
-        ]);
+        $this->queue->finishProcessingJob(timestamp: $timestamp);
 
         return $id;
-    }
-
-    /**
-     * Handle a job timing out.
-     *
-     * @return void
-     */
-    public function onJobTimeout()
-    {
-        // delete this?
-        $now = CarbonImmutable::now('UTC');
-        $processingJobDetails = call_user_func($this->processingJobDetailsResolver);
-
-        $this->events->emit([
-            '_cloud_event' => 'queue',
-            'timestamp' => $now->toDateTimeString('microsecond'),
-            'type' => 'failed',
-            'queue' => $processingJobDetails['queue'],
-            'duration_ms' => (int) $processingJobDetails['started_at']->diffInMilliseconds($now),
-        ]);
     }
 
     /**

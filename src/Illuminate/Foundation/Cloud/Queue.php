@@ -352,29 +352,24 @@ class Queue implements QueueContract, ClearableQueue
         $this->flush();
     }
 
-    public function finishProcessingJob($as = null)
+    public function finishProcessingJob($as = null, $timestamp = null)
     {
         if (! $this->processingJob) {
             return;
         }
 
-        if ($this->processingJob->hasFailed()) {
-            $this->flush();
-
-            return;
-        }
-
-        $now = CarbonImmutable::now('UTC');
+        $timestamp ??= CarbonImmutable::now('UTC');
 
         $this->events->emit([
             '_cloud_event' => 'queue',
-            'timestamp' => $now->toDateTimeString('microsecond'),
+            'timestamp' => $timestamp->toDateTimeString('microsecond'),
             'type' => $as ?? match (true) {
+                $this->processingJob->hasFailed() => 'failed',
                 $this->processingJob->isReleased() => 'released',
                 default => 'processed',
             },
             'queue' => $this->processingQueue,
-            'duration_ms' => (int) $this->processingJobStartedAt->diffInMilliseconds($now),
+            'duration_ms' => (int) $this->processingJobStartedAt->diffInMilliseconds($timestamp),
         ]);
 
         $this->flush();
