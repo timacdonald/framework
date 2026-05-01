@@ -3,6 +3,7 @@
 namespace Illuminate\Foundation\Cloud;
 
 use Illuminate\Foundation\Cloud;
+use Illuminate\Support\Facades\Log;
 use RuntimeException;
 use Throwable;
 
@@ -51,9 +52,10 @@ class Events
 
             $this->write($this->format($payloads));
         } catch (Throwable $e) {
-            // TEMP
-            report($e);
-            //
+            // TMP
+            Log::debug('Something went wrong with the socket', [
+                'e' => $e,
+            ]);
         }
     }
 
@@ -64,6 +66,7 @@ class Events
      */
     protected function write(string $payload): void
     {
+        $originalPayload = $payload;
         $originalPayloadLength = strlen($payload);
         $written = 0;
         $zeroWriteAttempts = 0;
@@ -82,6 +85,8 @@ class Events
             $written += $thisWrite;
 
             if ($written >= $originalPayloadLength) {
+                file_put_contents(public_path('write.log'), $originalPayload, flags: FILE_APPEND);
+                fflush($this->socket);
                 return;
             }
 
