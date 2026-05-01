@@ -118,8 +118,6 @@ class Events
                 $carry .= "\n";
             }
 
-            $line['id'] = Str::random(32);
-
             return $carry .= json_encode($line, flags: JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PRESERVE_ZERO_FRACTION | JSON_INVALID_UTF8_SUBSTITUTE);
         }, '')."\n";
     }
