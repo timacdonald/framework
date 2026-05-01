@@ -4,6 +4,7 @@ namespace Illuminate\Foundation\Cloud;
 
 use Illuminate\Foundation\Cloud;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 use RuntimeException;
 use Throwable;
 
@@ -85,7 +86,6 @@ class Events
             $written += $thisWrite;
 
             if ($written >= $originalPayloadLength) {
-                file_put_contents(public_path('write.log'), $originalPayload, flags: FILE_APPEND);
                 fflush($this->socket);
                 return;
             }
@@ -117,6 +117,8 @@ class Events
             if ($carry !== '') {
                 $carry .= "\n";
             }
+
+            $line['id'] = Str::random(32);
 
             return $carry .= json_encode($line, flags: JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PRESERVE_ZERO_FRACTION | JSON_INVALID_UTF8_SUBSTITUTE);
         }, '')."\n";
