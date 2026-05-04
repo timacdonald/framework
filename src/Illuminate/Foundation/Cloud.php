@@ -134,16 +134,10 @@ class Cloud
             return;
         }
 
-        $app['config']->set(
-            'queue.connections.sqs.credentials',
-            'ecs'
-        );
+        $app['config']->set('queue.connections.sqs.credentials', 'ecs');
 
         if (isset($_SERVER['LARAVEL_CLOUD_REGION'])) {
-            $app['config']->set(
-                'queue.connections.sqs.region',
-                $_SERVER['LARAVEL_CLOUD_REGION']
-            );
+            $app['config']->set('queue.connections.sqs.region', $_SERVER['LARAVEL_CLOUD_REGION']);
         }
     }
 
