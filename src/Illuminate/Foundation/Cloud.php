@@ -150,7 +150,7 @@ class Cloud
             return;
         }
 
-        $app->singleton(Events::class);
+        $app->singleton(Events::class, fn () => new Events(Cloud::socket()));
         $app->bind(QueueConnector::class, fn ($app) => new QueueConnector(new SqsConnector, $app));
         $app['queue']->addConnector('sqs', $app->factory(QueueConnector::class));
         $app['queue']->addConnector('database', $app->factory(QueueConnector::class));
@@ -193,7 +193,7 @@ class Cloud
     /**
      * The cloud socket address.
      */
-    public static function socket(): string
+    protected static function socket(): string
     {
         return $_ENV['LARAVEL_CLOUD_LOG_SOCKET'] ??
             $_SERVER['LARAVEL_CLOUD_LOG_SOCKET'] ??

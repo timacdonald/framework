@@ -28,6 +28,14 @@ class Events
     protected $socket = null;
 
     /**
+     * Create a new instance.
+     */
+    public function __construct(protected string $address)
+    {
+        //
+    }
+
+    /**
      * Emit an event.
      *
      * @param  array<string, mixed>  $payload
@@ -138,7 +146,7 @@ class Events
     protected function connect(): void
     {
         $socket = stream_socket_client(
-            address: Cloud::socket(),
+            address: $this->address,
             error_code: $errorCode,
             error_message: $errorMessage,
             timeout: self::CONNECTION_TIMEOUT,
