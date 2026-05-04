@@ -72,7 +72,6 @@ class Events
      */
     protected function write(string $payload): void
     {
-        $originalPayload = $payload;
         $originalPayloadLength = strlen($payload);
         $written = 0;
         $zeroWriteAttempts = 0;
@@ -91,7 +90,6 @@ class Events
             $written += $thisWrite;
 
             if ($written >= $originalPayloadLength) {
-                fflush($this->socket);
                 return;
             }
 
