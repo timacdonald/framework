@@ -508,7 +508,7 @@ class QueueTest extends TestCase
 
     private function fakeEvents()
     {
-        return new class extends Events
+        return new class('test-socket') extends Events
         {
             public array $emitted = [];
 
