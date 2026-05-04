@@ -203,7 +203,7 @@ class Cloud
     /**
      * Determine if managed queues are active.
      */
-    public static function managedQueuesAreActive(): bool
+    protected static function managedQueuesAreActive(): bool
     {
         return ($_SERVER['LARAVEL_CLOUD_MANAGED_QUEUES'] ?? null) === '1';
     }
