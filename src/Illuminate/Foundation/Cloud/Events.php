@@ -60,11 +60,8 @@ class Events
             $this->ensureConnected();
 
             $this->write($this->format($payloads));
-        } catch (Throwable $e) {
-            // TMP
-            Log::debug('Something went wrong with the socket', [
-                'e' => $e,
-            ]);
+        } catch (Throwable) {
+            //
         }
     }
 
