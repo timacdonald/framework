@@ -96,7 +96,6 @@ class FailedJobProvider implements FailedJobProviderInterface
             return $this->failer->find($id);
         }
 
-        // connection, queue, payload (json encoded and serialized)
         $response = Http::connectTimeout(10)
             ->timeout(10)
             ->retry(3, 1000, fn ($exception) => $exception instanceof ConnectionException)
