@@ -7,7 +7,6 @@ use Illuminate\Queue\Connectors\ConnectorInterface;
 use Illuminate\Queue\Events\WorkerStopping;
 use Illuminate\Queue\Worker;
 use Illuminate\Queue\WorkerStopReason;
-use Illuminate\Support\Facades\App;
 
 class QueueConnector implements ConnectorInterface
 {
@@ -35,7 +34,6 @@ class QueueConnector implements ConnectorInterface
 
         $this->configureWorker($queue);
         $this->configureFailedJobProvider($queue);
-
 
         return $queue;
     }
@@ -75,6 +73,6 @@ class QueueConnector implements ConnectorInterface
             return;
         }
 
-        $this->app['queue.failer'] = new FailedJobProvider($this->app[Events::class], $queue);
+        $this->app['queue.failer'] = new FailedJobProvider($this->app[Events::class], $queue, $this->app['queue.failer']);
     }
 }

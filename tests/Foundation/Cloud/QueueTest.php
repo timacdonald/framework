@@ -6,9 +6,11 @@ use Illuminate\Foundation\Cloud;
 use Illuminate\Foundation\Cloud\Events;
 use Illuminate\Foundation\Cloud\FailedJobProvider;
 use Illuminate\Foundation\Cloud\Queue;
+use Illuminate\Queue\Failed\FileFailedJobProvider;
 use Illuminate\Queue\Jobs\FakeJob;
 use Illuminate\Queue\SqsQueue;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 use Illuminate\Support\Testing\Fakes\QueueFake;
 use Orchestra\Testbench\TestCase;
@@ -170,8 +172,8 @@ class QueueTest extends TestCase
         $eventsFake = $this->fakeEvents();
         $queueFake = $this->fakeQueue();
         $queue = new Queue($queueFake, $eventsFake);
-        $failedJobProvider = new FailedJobProvider($eventsFake);
-        $failedJobProvider->setProcessingJobDetailsResolver($queue->processingJobDetails(...));
+        $failerFake = $this->fakeFailer();
+        $failedJobProvider = new FailedJobProvider($eventsFake, $queue, $failerFake);
         $this->app[FailedJobProvider::class] = $failedJobProvider;
 
         $queueFake->jobsToPop[] = $jobFake = new FakeJob;
@@ -361,6 +363,149 @@ class QueueTest extends TestCase
 
     }
 
+    public function testFindProxiesToFailerForNonCloudUrls()
+    {
+        $eventsFake = $this->fakeEvents();
+        $queueFake = $this->fakeQueue();
+        $queue = new Queue($queueFake, $eventsFake);
+        $failer = $this->fakeFailer();
+        $provider = new FailedJobProvider($eventsFake, $queue, $failer);
+
+        $job = $provider->find('not-a-cloud-url');
+
+        $this->assertNull($job);
+    }
+
+    public function testFindMakesHttpRequestForCloudUrls()
+    {
+        Http::fake([
+            'https://cloud.laravel.com/api/*' => Http::response([
+                'connection' => 'database',
+                'queue' => 'default',
+                'payload' => json_encode(['id' => 123]),
+                'id' => 'test-job-id',
+            ]),
+        ]);
+
+        $eventsFake = $this->fakeEvents();
+        $queueFake = $this->fakeQueue();
+        $queue = new Queue($queueFake, $eventsFake);
+        $failer = $this->fakeFailer();
+        $provider = new FailedJobProvider($eventsFake, $queue, $failer);
+
+        $job = $provider->find('https://cloud.laravel.com/api/jobs/test-job-id');
+
+        $this->assertNotNull($job);
+        $this->assertEquals('database', $job->connection);
+        $this->assertEquals('default', $job->queue);
+        $this->assertEquals(json_encode(['id' => 123]), $job->payload);
+        Http::assertSent(fn ($request) => $request->url() === 'https://cloud.laravel.com/api/jobs/test-job-id');
+    }
+
+    public function testFindReturnsNullForInvalidResponse()
+    {
+        Http::fake([
+            'https://cloud.laravel.com/api/*' => Http::response([
+                'invalid' => 'response',
+            ]),
+        ]);
+
+        $eventsFake = $this->fakeEvents();
+        $queueFake = $this->fakeQueue();
+        $queue = new Queue($queueFake, $eventsFake);
+        $failer = $this->fakeFailer();
+        $provider = new FailedJobProvider($eventsFake, $queue, $failer);
+
+        $job = $provider->find('https://cloud.laravel.com/api/jobs/test-job-id');
+
+        $this->assertNull($job);
+    }
+
+    public function testFindCachesResultForForget()
+    {
+        Http::fake([
+            'https://cloud.laravel.com/api/*' => Http::response([
+                'connection' => 'database',
+                'queue' => 'default',
+                'payload' => json_encode(['id' => 123]),
+                'id' => 'cached-job-id',
+            ]),
+        ]);
+
+        $this->travelTo('2000-01-02 03:04:05.060708');
+        $eventsFake = $this->fakeEvents();
+        $queueFake = $this->fakeQueue();
+        $queue = new Queue($queueFake, $eventsFake);
+        $failer = $this->fakeFailer();
+        $provider = new FailedJobProvider($eventsFake, $queue, $failer);
+
+        // First find caches the result
+        $job = $provider->find('https://cloud.laravel.com/api/jobs/cached-job-id');
+        $this->assertNotNull($job);
+
+        // Second find makes another HTTP request (no memoization in find)
+        Http::assertSentCount(1);
+        $job2 = $provider->find('https://cloud.laravel.com/api/jobs/cached-job-id');
+        Http::assertSentCount(2);
+
+        // But forget uses the cached data from the most recent find
+        $result = $provider->forget('https://cloud.laravel.com/api/jobs/cached-job-id');
+        $this->assertTrue($result);
+    }
+
+    public function testForgetProxiesToFailerForUncachedJobs()
+    {
+        $eventsFake = $this->fakeEvents();
+        $queueFake = $this->fakeQueue();
+        $queue = new Queue($queueFake, $eventsFake);
+        $failer = $this->fakeFailer();
+        $provider = new FailedJobProvider($eventsFake, $queue, $failer);
+
+        // First log a job to the failer with a UUID
+        $uuid = (string) Str::uuid();
+        $failer->log('database', 'default', json_encode(['uuid' => $uuid]), new \Exception('test'));
+        $jobId = $failer->ids()[0];
+
+        // Forget should delegate to the underlying failer
+        $result = $provider->forget($jobId);
+
+        $this->assertTrue($result);
+        $this->assertEmpty($failer->ids());
+    }
+
+    public function testForgetEmitsEventForCachedCloudJobs()
+    {
+        Http::fake([
+            'https://cloud.laravel.com/api/*' => Http::response([
+                'connection' => 'database',
+                'queue' => 'default',
+                'payload' => json_encode(['id' => 123]),
+                'id' => 'forget-test-id',
+            ]),
+        ]);
+
+        $this->travelTo('2000-01-02 03:04:05.060708');
+        $eventsFake = $this->fakeEvents();
+        $queueFake = $this->fakeQueue();
+        $queue = new Queue($queueFake, $eventsFake);
+        $failer = $this->fakeFailer();
+        $provider = new FailedJobProvider($eventsFake, $queue, $failer);
+
+        $provider->find('https://cloud.laravel.com/api/jobs/forget-test-id');
+
+        $result = $provider->forget('https://cloud.laravel.com/api/jobs/forget-test-id');
+
+        $this->assertTrue($result);
+        $this->assertSame([
+            [
+                '_cloud_event' => 'failed_job',
+                'id' => 'forget-test-id',
+                'queue' => 'default',
+                'retried_at' => '2000-01-02 03:04:05.060708',
+            ],
+        ], $eventsFake->emitted);
+    }
+
     private function fakeEvents()
     {
         return new class extends Events
@@ -395,5 +540,10 @@ class QueueTest extends TestCase
                 return $_SERVER['SQS_PREFIX'].'/'.$queue.$_SERVER['SQS_SUFFIX'];
             }
         };
+    }
+
+    private function fakeFailer()
+    {
+        return new FileFailedJobProvider(tempnam(sys_get_temp_dir(), 'cloud_failed_job_test_'));
     }
 }

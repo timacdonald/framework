@@ -3,17 +3,27 @@
 namespace Illuminate\Foundation\Cloud;
 
 use Carbon\CarbonImmutable;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Queue\Failed\FailedJobProviderInterface;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 
 class FailedJobProvider implements FailedJobProviderInterface
 {
+    /**
+     * The loaded failed jobs keyed by ID.
+     *
+     * @var array<string, object>
+     */
+    private array $loadedFailedJobs = [];
+
     /**
      * Create a new instance.
      */
     public function __construct(
         protected Events $events,
         protected Queue $queue,
+        protected FailedJobProviderInterface $failer,
     ) {
         //
     }
@@ -29,6 +39,10 @@ class FailedJobProvider implements FailedJobProviderInterface
      */
     public function log($connection, $queue, $payload, $exception)
     {
+        if ($connection !== 'sqs') {
+            return $this->failer->log(...func_get_args());
+        }
+
         $timestamp = CarbonImmutable::now('UTC');
         $processingJobDetails = $this->queue->processingJobDetails();
 
@@ -55,7 +69,7 @@ class FailedJobProvider implements FailedJobProviderInterface
      */
     public function ids($queue = null)
     {
-        return [];
+        return $this->failer->ids(...func_get_args());
     }
 
     /**
@@ -65,7 +79,7 @@ class FailedJobProvider implements FailedJobProviderInterface
      */
     public function all()
     {
-        return [];
+        return $this->failer->all(...func_get_args());
     }
 
     /**
@@ -76,7 +90,28 @@ class FailedJobProvider implements FailedJobProviderInterface
      */
     public function find($id)
     {
-        return null;
+        // TODO: validate incoming $id is the expected URL
+        // TODO: proxy through to another failed job driver if not
+        if (! str_starts_with($id, 'https://cloud.laravel.com/api/')) {
+            return $this->failer->find($id);
+        }
+
+        // connection, queue, payload (json encoded and serialized)
+        $response = Http::connectTimeout(10)
+            ->timeout(10)
+            ->retry(3, 1000, fn ($exception) => $exception instanceof ConnectionException)
+            ->throw()
+            ->get($id);
+
+        $data = $response->object();
+
+        if (! isset($data->connection, $data->queue, $data->payload)) {
+            return null;
+        }
+
+        $this->loadedFailedJobs[$id] = $data;
+
+        return $data;
     }
 
     /**
@@ -87,7 +122,20 @@ class FailedJobProvider implements FailedJobProviderInterface
      */
     public function forget($id)
     {
-        return false;
+        if (! isset($this->loadedFailedJobs[$id])) {
+            return $this->failer->forget($id);
+        }
+
+        $job = $this->loadedFailedJobs[$id];
+
+        $this->events->emit([
+            '_cloud_event' => 'failed_job',
+            'id' => $job->id,
+            'queue' => $job->queue,
+            'retried_at' => now()->toDateTimeString('microsecond'),
+        ]);
+
+        return true;
     }
 
     /**
@@ -98,19 +146,6 @@ class FailedJobProvider implements FailedJobProviderInterface
      */
     public function flush($hours = null)
     {
-        //
-    }
-
-    /**
-     * Set the last job details resolver.
-     *
-     * @param  (callable(): (array{queue: string, attempts: int, started_at: CarbonImmutable}))  $processingJobDetailsResolver  $callback
-     * @return $this
-     */
-    public function setProcessingJobDetailsResolver(callable $callback)
-    {
-        $this->processingJobDetailsResolver = $callback;
-
-        return $this;
+        $this->failer->flush(...func_get_args());
     }
 }
