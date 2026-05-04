@@ -349,7 +349,7 @@ class Queue implements QueueContract, ClearableQueue
             'queue' => $this->normalizeQueue($queue),
         ]));
 
-        $this->flush();
+        $this->lastJobPushedAt = null;
     }
 
     public function finishProcessingJob($as = null, $timestamp = null)
@@ -372,7 +372,11 @@ class Queue implements QueueContract, ClearableQueue
             'duration_ms' => (int) $this->processingJobStartedAt->diffInMilliseconds($timestamp),
         ]);
 
-        $this->flush();
+
+        $this->processingQueue
+            = $this->processingJob
+            = $this->processingJobStartedAt
+            = null;
     }
 
     /**
@@ -412,20 +416,6 @@ class Queue implements QueueContract, ClearableQueue
             ->chopStart($_SERVER['SQS_PREFIX'].'/')
             ->chopEnd($_SERVER['SQS_SUFFIX'])
             ->toString();
-    }
-
-    /**
-     * Flush the state.
-     *
-     * @return void
-     */
-    protected function flush()
-    {
-        $this->lastJobPushedAt
-            = $this->processingQueue
-            = $this->processingJob
-            = $this->processingJobStartedAt
-            = null;
     }
 
     /**
