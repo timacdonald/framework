@@ -73,6 +73,6 @@ class QueueConnector implements ConnectorInterface
             return;
         }
 
-        $this->app['queue.failer'] = new FailedJobProvider($this->app[Events::class], $queue, $this->app['queue.failer']);
+        $this->app['queue.failer']->setQueue($queue);
     }
 }

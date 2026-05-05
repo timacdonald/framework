@@ -7,23 +7,25 @@ use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Queue\Failed\FailedJobProviderInterface;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
+use RuntimeException;
 
 class FailedJobProvider implements FailedJobProviderInterface
 {
+    protected ?Queue $queue;
+
     /**
      * The loaded failed jobs keyed by ID.
      *
      * @var array<string, object>
      */
-    private array $loadedFailedJobs = [];
+    protected array $loadedFailedJobs = [];
 
     /**
      * Create a new instance.
      */
     public function __construct(
-        protected Events $events,
-        protected Queue $queue,
         protected FailedJobProviderInterface $failer,
+        protected Events $events,
     ) {
         //
     }
@@ -41,6 +43,10 @@ class FailedJobProvider implements FailedJobProviderInterface
     {
         if ($connection !== 'sqs') {
             return $this->failer->log(...func_get_args());
+        }
+
+        if ($this->queue === null) {
+            throw new RuntimeException('The failed job provider does not have a configured queue');
         }
 
         $timestamp = CarbonImmutable::now('UTC');
@@ -137,5 +143,15 @@ class FailedJobProvider implements FailedJobProviderInterface
     public function flush($hours = null)
     {
         $this->failer->flush(...func_get_args());
+    }
+
+    /**
+     * Set the queue instance.
+     */
+    public function setQueue(Queue $queue):  self
+    {
+        $this->queue = $queue;
+
+        return $this;
     }
 }

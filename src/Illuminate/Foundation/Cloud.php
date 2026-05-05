@@ -151,6 +151,11 @@ class Cloud
         }
 
         $app->singleton(Events::class, fn () => new Events(Cloud::socket()));
+
+        $failer = $app['queue.failer'];
+        unset($app['queue.failer']);
+        $app->singleton('queue.failer', fn ($app) => new FailedJobProvider($failer, $app[Events::class]));
+
         $app->bind(QueueConnector::class, fn ($app) => new QueueConnector(new SqsConnector, $app));
         $app['queue']->addConnector('sqs', $app->factory(QueueConnector::class));
         $app['queue']->addConnector('database', $app->factory(QueueConnector::class));
