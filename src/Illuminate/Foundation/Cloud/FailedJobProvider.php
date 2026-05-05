@@ -12,7 +12,7 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 use RuntimeException;
 
-class FailedJobProvider implements CountableFailedJobProvider, FailedJobProviderInterface, PrunableFailedJobProvider
+class FailedJobProvider implements FailedJobProviderInterface, CountableFailedJobProvider, PrunableFailedJobProvider
 {
     /**
      * The connected queue instance.
@@ -32,7 +32,7 @@ class FailedJobProvider implements CountableFailedJobProvider, FailedJobProvider
      * Create a new instance.
      */
     public function __construct(
-        protected FailedJobProviderInterface|CountableFailedJobProvider|PrunableFailedJobProvider $failer,
+        protected FailedJobProviderInterface $failer,
         protected Events $events,
     ) {
         //
@@ -162,7 +162,11 @@ class FailedJobProvider implements CountableFailedJobProvider, FailedJobProvider
      */
     public function count($connection = null, $queue = null)
     {
-        return $this->failer->count(...func_get_args());
+        if ($this->failer instanceof CountableFailedJobProvider) {
+            return $this->failer->count(...func_get_args());
+        }
+
+        return 0;
     }
 
     /**
@@ -173,7 +177,11 @@ class FailedJobProvider implements CountableFailedJobProvider, FailedJobProvider
      */
     public function prune(DateTimeInterface $before)
     {
-        return $this->failer->prune(...func_get_args());
+        if ($this->failer instanceof PrunableFailedJobProvider) {
+            return $this->failer->prune(...func_get_args());
+        }
+
+        return 0;
     }
 
     /**
