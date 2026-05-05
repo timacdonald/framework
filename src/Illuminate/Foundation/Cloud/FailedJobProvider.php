@@ -90,8 +90,6 @@ class FailedJobProvider implements FailedJobProviderInterface
      */
     public function find($id)
     {
-        // TODO: validate incoming $id is the expected URL
-        // TODO: proxy through to another failed job driver if not
         if (! str_starts_with($id, 'https://cloud.laravel.com/api/')) {
             return $this->failer->find($id);
         }
