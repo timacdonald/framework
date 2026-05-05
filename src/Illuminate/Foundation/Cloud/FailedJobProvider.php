@@ -116,6 +116,7 @@ class FailedJobProvider implements FailedJobProviderInterface
         }
 
         $job = $this->loadedFailedJobs[$id];
+        unset($this->loadedFailedJobs[$id]);
 
         $this->events->emit([
             '_cloud_event' => 'failed_job',
