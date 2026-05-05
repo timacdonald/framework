@@ -100,11 +100,7 @@ class FailedJobProvider implements FailedJobProviderInterface
             ->throw()
             ->get($id);
 
-        $job = $response->object();
-
-        $this->loadedFailedJobs[$id] = $job;
-
-        return $job;
+        return $this->loadedFailedJobs[$id] = $response->object();
     }
 
     /**
