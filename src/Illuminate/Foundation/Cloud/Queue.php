@@ -372,7 +372,6 @@ class Queue implements QueueContract, ClearableQueue
             'duration_ms' => (int) $this->processingJobStartedAt->diffInMilliseconds($timestamp),
         ]);
 
-
         $this->processingQueue
             = $this->processingJob
             = $this->processingJobStartedAt
