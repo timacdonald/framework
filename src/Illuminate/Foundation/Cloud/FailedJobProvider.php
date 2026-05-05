@@ -102,10 +102,6 @@ class FailedJobProvider implements FailedJobProviderInterface
 
         $data = $response->object();
 
-        if (! isset($data->connection, $data->queue, $data->payload)) {
-            return null;
-        }
-
         $this->loadedFailedJobs[$id] = $data;
 
         return $data;
