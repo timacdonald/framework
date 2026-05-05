@@ -13,7 +13,7 @@ class QueueConnector implements ConnectorInterface
     /**
      * Reserved memory so that errors can emit events correctly on memory exhaustion.
      */
-    private static string|null $reservedMemory = null;
+    private static ?string $reservedMemory = null;
 
     /**
      * Create a new instance.
