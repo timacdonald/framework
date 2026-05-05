@@ -11,7 +11,12 @@ use RuntimeException;
 
 class FailedJobProvider implements FailedJobProviderInterface
 {
-    protected ?Queue $queue;
+    /**
+     * The connected queue instance.
+     *
+     * @var ?\Illuminate\Foundation\Cloud\Queue
+     */
+    protected $queue;
 
     /**
      * The loaded failed jobs keyed by ID.
