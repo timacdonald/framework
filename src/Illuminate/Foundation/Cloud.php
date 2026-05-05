@@ -8,12 +8,9 @@ use Illuminate\Foundation\Bootstrap\HandleExceptions;
 use Illuminate\Foundation\Bootstrap\LoadConfiguration;
 use Illuminate\Foundation\Cloud\Events;
 use Illuminate\Foundation\Cloud\FailedJobProvider;
-use Illuminate\Foundation\Cloud\Queue;
 use Illuminate\Foundation\Cloud\QueueConnector;
 use Illuminate\Queue\Connectors\DatabaseConnector;
 use Illuminate\Queue\Connectors\SqsConnector;
-use Illuminate\Queue\Events\WorkerStopping;
-use Illuminate\Queue\Worker;
 use Monolog\Formatter\JsonFormatter;
 use Monolog\Handler\SocketHandler;
 use PDO;
@@ -160,7 +157,7 @@ class Cloud
         $app['queue']->addConnector('sqs', $app->factory(QueueConnector::class));
         $app['queue']->addConnector('database', $app->factory(QueueConnector::class));
 
-        /* Temporary to allow testing locally with database driver... */
+        // Temporary to allow testing locally with database driver...
         $app->singleton(QueueConnector::class, function ($app) {
             $connector = match($app['config']->get('queue.default')) {
                 'database' => new DatabaseConnector($app['db']),

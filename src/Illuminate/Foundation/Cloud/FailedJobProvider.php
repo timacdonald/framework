@@ -3,13 +3,16 @@
 namespace Illuminate\Foundation\Cloud;
 
 use Carbon\CarbonImmutable;
+use DateTimeInterface;
 use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Queue\Failed\CountableFailedJobProvider;
 use Illuminate\Queue\Failed\FailedJobProviderInterface;
+use Illuminate\Queue\Failed\PrunableFailedJobProvider;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 use RuntimeException;
 
-class FailedJobProvider implements FailedJobProviderInterface
+class FailedJobProvider implements CountableFailedJobProvider, FailedJobProviderInterface, PrunableFailedJobProvider
 {
     /**
      * The connected queue instance.
@@ -29,7 +32,7 @@ class FailedJobProvider implements FailedJobProviderInterface
      * Create a new instance.
      */
     public function __construct(
-        protected FailedJobProviderInterface $failer,
+        protected FailedJobProviderInterface|CountableFailedJobProvider|PrunableFailedJobProvider $failer,
         protected Events $events,
     ) {
         //
@@ -151,9 +154,32 @@ class FailedJobProvider implements FailedJobProviderInterface
     }
 
     /**
+     * Count the failed jobs.
+     *
+     * @param  string|null  $connection
+     * @param  string|null  $queue
+     * @return int
+     */
+    public function count($connection = null, $queue = null)
+    {
+        return $this->failer->count(...func_get_args());
+    }
+
+    /**
+     * Prune all of the entries older than the given date.
+     *
+     * @param  \DateTimeInterface  $before
+     * @return int
+     */
+    public function prune(DateTimeInterface $before)
+    {
+        return $this->failer->prune(...func_get_args());
+    }
+
+    /**
      * Set the queue instance.
      */
-    public function setQueue(Queue $queue):  self
+    public function setQueue(Queue $queue): self
     {
         $this->queue = $queue;
 
