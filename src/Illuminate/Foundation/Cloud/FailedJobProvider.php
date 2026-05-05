@@ -122,7 +122,7 @@ class FailedJobProvider implements FailedJobProviderInterface
             '_cloud_event' => 'failed_job',
             'id' => $job->id,
             'queue' => $job->queue,
-            'retried_at' => now()->toDateTimeString('microsecond'),
+            'retried_at' => CarbonImmutable::now('UTC')->toDateTimeString('microsecond'),
         ]);
 
         return true;
