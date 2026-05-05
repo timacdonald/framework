@@ -74,7 +74,7 @@ class Events
     {
         $originalPayloadLength = strlen($payload);
         $written = 0;
-        $zeroWriteAttempts = 0;
+        $zeroLengthWrites = 0;
 
         while (true) {
             $thisWrite = @fwrite($this->socket, $payload);
@@ -94,10 +94,10 @@ class Events
             }
 
             if ($thisWrite === 0) {
-                $zeroWriteAttempts++;
+                $zeroLengthWrites++;
             }
 
-            if ($zeroWriteAttempts >= 5) {
+            if ($zeroLengthWrites >= 5) {
                 $e = new RuntimeException($this->withSocketMetaData('Unable to write bytes to socket'));
 
                 $this->disconnect();
