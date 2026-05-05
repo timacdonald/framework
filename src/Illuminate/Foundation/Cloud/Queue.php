@@ -296,6 +296,10 @@ class Queue implements QueueContract, ClearableQueue
      */
     public function getQueueableOptions($job, $queue, $payload, $delay = null): array
     {
+        if (! method_exists($this->queue, 'getQueueableOptions')) {
+            return [];
+        }
+
         return $this->queue->getQueueableOptions(...func_get_args());
     }
 
