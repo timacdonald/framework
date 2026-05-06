@@ -17,6 +17,8 @@ use Illuminate\Support\Str;
 use Illuminate\Support\Traits\ReflectsClosures;
 use PHPUnit\Framework\Assert as PHPUnit;
 
+use function Illuminate\Support\enum_value;
+
 /**
  * @phpstan-type RawPushType array{"payload": string, "queue": string|null, "options": array<array-key, mixed>}
  */
@@ -149,7 +151,7 @@ class QueueFake extends QueueManager implements Fake, Queue
     /**
      * Assert if a job was pushed based on a truth-test callback.
      *
-     * @param  string  $queue
+     * @param  \UnitEnum|string  $queue
      * @param  string|\Closure  $job
      * @param  callable|null  $callback
      * @return void
@@ -160,8 +162,10 @@ class QueueFake extends QueueManager implements Fake, Queue
             [$job, $callback] = [$this->firstClosureParameterType($job), $job];
         }
 
+        $queue = enum_value($queue);
+
         $this->assertPushed($job, function ($job, $pushedQueue) use ($callback, $queue) {
-            if ($pushedQueue !== $queue) {
+            if (enum_value($pushedQueue) !== $queue) {
                 return false;
             }
 
@@ -496,6 +500,45 @@ class QueueFake extends QueueManager implements Fake, Queue
      * @return \Illuminate\Support\Collection
      */
     public function reservedJobs($queue = null): Collection
+    {
+        return new Collection;
+    }
+
+    /**
+     * Get all pending jobs across every queue.
+     *
+     * @return \Illuminate\Support\Collection<int, \Illuminate\Queue\Jobs\InspectedJob>
+     */
+    public function allPendingJobs(): Collection
+    {
+        return (new Collection($this->jobs))
+            ->flatten(1)
+            ->map(fn ($data) => new InspectedJob(
+                uuid: null,
+                name: is_object($data['job'])
+                    ? (method_exists($data['job'], 'displayName') ? $data['job']->displayName() : get_class($data['job']))
+                    : $data['job'],
+                attempts: 0,
+                createdAt: null,
+            ));
+    }
+
+    /**
+     * Get all delayed jobs across every queue.
+     *
+     * @return \Illuminate\Support\Collection
+     */
+    public function allDelayedJobs(): Collection
+    {
+        return new Collection;
+    }
+
+    /**
+     * Get all reserved jobs across every queue.
+     *
+     * @return \Illuminate\Support\Collection
+     */
+    public function allReservedJobs(): Collection
     {
         return new Collection;
     }

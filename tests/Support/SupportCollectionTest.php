@@ -23,6 +23,7 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\IgnoreDeprecations;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
+use SortDirection;
 use stdClass;
 use Symfony\Component\VarDumper\VarDumper;
 use UnexpectedValueException;
@@ -2064,6 +2065,16 @@ class SupportCollectionTest extends TestCase
         $this->assertEquals(['dayle', 'taylor'], array_values($data->all()));
 
         $data = new $collection(['dayle', 'taylor']);
+        $data = $data->sortBy(
+            function ($x) {
+                return $x;
+            },
+            SORT_REGULAR,
+            SortDirection::Descending);
+
+        $this->assertEquals(['taylor', 'dayle'], array_values($data->all()));
+
+        $data = new $collection(['dayle', 'taylor']);
         $data = $data->sortByDesc(function ($x) {
             return $x;
         });
@@ -2151,6 +2162,14 @@ class SupportCollectionTest extends TestCase
 
         rsort($expected);
         $data = $data->sortBy([['item', 'desc']]);
+        $this->assertEquals($data->pluck('item')->toArray(), $expected);
+
+        rsort($expected);
+        $data = $data->sortBy([['item', false]]);
+        $this->assertEquals($data->pluck('item')->toArray(), $expected);
+
+        rsort($expected);
+        $data = $data->sortBy([['item', SortDirection::Descending]]);
         $this->assertEquals($data->pluck('item')->toArray(), $expected);
 
         sort($expected, SORT_STRING);
@@ -3749,6 +3768,20 @@ class SupportCollectionTest extends TestCase
             return $item['rating'] * 2;
         });
         $this->assertEquals([2 => ['rating' => 1, 'name' => '1'], 4 => ['rating' => 2, 'name' => '2'], 6 => ['rating' => 3, 'name' => '3']], $result->all());
+    }
+
+    #[DataProvider('collectionClassProvider')]
+    public function testKeyByBackedEnum($collection)
+    {
+        $data = new $collection([
+            ['id' => 1, 'status' => TestStringBackedEnum::A],
+            ['id' => 2, 'status' => TestStringBackedEnum::B],
+        ]);
+
+        $this->assertEquals([
+            TestStringBackedEnum::A->value => ['id' => 1, 'status' => TestStringBackedEnum::A],
+            TestStringBackedEnum::B->value => ['id' => 2, 'status' => TestStringBackedEnum::B],
+        ], $data->keyBy('status')->all());
     }
 
     #[DataProvider('collectionClassProvider')]
