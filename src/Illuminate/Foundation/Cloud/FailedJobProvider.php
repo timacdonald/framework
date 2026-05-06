@@ -137,12 +137,14 @@ class FailedJobProvider implements FailedJobProviderInterface, CountableFailedJo
         $job = $this->loadedFailedJobs[$id];
         unset($this->loadedFailedJobs[$id]);
 
-        $this->events->emit([
+        $this->events->emit($payload = [
             '_cloud_event' => 'failed_job',
             'id' => $job->id,
             'queue' => $job->queue,
             'retried_at' => CarbonImmutable::now('UTC')->toDateTimeString('microsecond'),
         ]);
+
+        Log::info('Successfully retried failed job: '.$id, $payload);
 
         return true;
     }
