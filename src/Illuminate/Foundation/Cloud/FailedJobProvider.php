@@ -104,13 +104,14 @@ class FailedJobProvider implements FailedJobProviderInterface, CountableFailedJo
      */
     public function find($id)
     {
-        if (! str_starts_with($id, 'https://cloud.laravel.com/')) {
+        if (! str_starts_with($id, 'https://app.dev-laravel.cloud/')) {
             return $this->failer->find($id);
         }
 
         $response = Http::connectTimeout(10)
             ->timeout(10)
             ->retry(3, 1000, fn ($exception) => $exception instanceof ConnectionException)
+            ->acceptJson()
             ->throw()
             ->get($id);
 
