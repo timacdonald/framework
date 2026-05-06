@@ -104,7 +104,7 @@ class FailedJobProvider implements FailedJobProviderInterface, CountableFailedJo
      */
     public function find($id)
     {
-        if (! str_starts_with($id, 'https://cloud.laravel.com/api/')) {
+        if (! str_starts_with($id, 'https://cloud.laravel.com/')) {
             return $this->failer->find($id);
         }
 
