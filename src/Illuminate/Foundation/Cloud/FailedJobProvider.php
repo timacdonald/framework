@@ -162,11 +162,11 @@ class FailedJobProvider implements FailedJobProviderInterface, CountableFailedJo
      */
     public function count($connection = null, $queue = null)
     {
-        if ($this->failer instanceof CountableFailedJobProvider) {
-            return $this->failer->count(...func_get_args());
+        if (! $this->failer instanceof CountableFailedJobProvider) {
+            return 0;
         }
 
-        return 0;
+        return $this->failer->count(...func_get_args());
     }
 
     /**
@@ -177,11 +177,11 @@ class FailedJobProvider implements FailedJobProviderInterface, CountableFailedJo
      */
     public function prune(DateTimeInterface $before)
     {
-        if ($this->failer instanceof PrunableFailedJobProvider) {
-            return $this->failer->prune(...func_get_args());
+        if (! $this->failer instanceof PrunableFailedJobProvider) {
+            return 0;
         }
 
-        return 0;
+        return $this->failer->prune(...func_get_args());
     }
 
     /**
