@@ -185,9 +185,12 @@ class FailedJobProvider implements FailedJobProviderInterface, CountableFailedJo
     }
 
     /**
-     * Set the queue instance.
+     * Set the connected queue instance.
+     *
+     * @param \Illuminate\Foundation\Cloud\Queue  $queue
+     * @return $this
      */
-    public function setQueue(Queue $queue): self
+    public function setQueue($queue)
     {
         $this->queue = $queue;
 
