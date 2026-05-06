@@ -19,14 +19,14 @@ class FailedJobProvider implements FailedJobProviderInterface, CountableFailedJo
      *
      * @var ?\Illuminate\Foundation\Cloud\Queue
      */
-    protected $queue;
+    protected $queue = null;
 
     /**
      * The loaded failed jobs keyed by ID.
      *
      * @var array<string, object>
      */
-    protected array $loadedFailedJobs = [];
+    protected $loadedFailedJobs = [];
 
     /**
      * Create a new instance.
