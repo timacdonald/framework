@@ -32,6 +32,10 @@ class QueueConnector implements ConnectorInterface
     {
         $queue = new Queue($this->connector->connect($config), $this->app[Events::class]);
 
+        if (! $this->app->runningConsoleCommand('queue:work')) {
+            return $queue;
+        }
+
         $this->configureWorker($queue);
         $this->configureFailedJobProvider($queue);
 
@@ -43,10 +47,6 @@ class QueueConnector implements ConnectorInterface
      */
     protected function configureWorker(Queue $queue): void
     {
-        if (! $this->app->runningConsoleCommand('queue:work')) {
-            return;
-        }
-
         Worker::$restartable = false;
 
         $this->app['events']->listen(fn (WorkerStopping $event) => match ($event->reason) {
@@ -69,10 +69,6 @@ class QueueConnector implements ConnectorInterface
      */
     protected function configureFailedJobProvider(Queue $queue): void
     {
-        if (! $this->app->runningConsoleCommand('queue:work')) {
-            return;
-        }
-
         $this->app['queue.failer']->setQueue($queue);
     }
 }
