@@ -9,6 +9,7 @@ use Illuminate\Queue\Failed\CountableFailedJobProvider;
 use Illuminate\Queue\Failed\FailedJobProviderInterface;
 use Illuminate\Queue\Failed\PrunableFailedJobProvider;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use RuntimeException;
 
@@ -126,7 +127,10 @@ class FailedJobProvider implements FailedJobProviderInterface, CountableFailedJo
      */
     public function forget($id)
     {
+        Log::info('Forgetting failed job: '.$id);
         if (! isset($this->loadedFailedJobs[$id])) {
+            Log::info('Failed job not found: '.$id);
+
             return $this->failer->forget($id);
         }
 
@@ -188,7 +192,7 @@ class FailedJobProvider implements FailedJobProviderInterface, CountableFailedJo
     /**
      * Set the connected queue instance.
      *
-     * @param \Illuminate\Foundation\Cloud\Queue  $queue
+     * @param  \Illuminate\Foundation\Cloud\Queue  $queue
      * @return $this
      */
     public function setQueue($queue)
