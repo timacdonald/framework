@@ -303,6 +303,32 @@ class Queue implements QueueContract, ClearableQueue
         return $this->queue->getQueueableOptions(...func_get_args());
     }
 
+    public function finishProcessingJob($as = null, $timestamp = null)
+    {
+        if (! $this->processingJob) {
+            return;
+        }
+
+        $timestamp ??= CarbonImmutable::now('UTC');
+
+        $this->events->emit([
+            '_cloud_event' => 'queue',
+            'timestamp' => $timestamp->toDateTimeString('microsecond'),
+            'type' => $as ?? match (true) {
+                $this->processingJob->hasFailed() => 'failed',
+                $this->processingJob->isReleased() => 'released',
+                default => 'processed',
+            },
+            'queue' => $this->processingQueue,
+            'duration_ms' => (int) $this->processingJobStartedAt->diffInMilliseconds($timestamp),
+        ]);
+
+        $this->processingQueue
+            = $this->processingJob
+            = $this->processingJobStartedAt
+            = null;
+    }
+
     /**
      * Last job details resolver.
      *
@@ -356,31 +382,6 @@ class Queue implements QueueContract, ClearableQueue
         $this->lastJobPushedAt = null;
     }
 
-    public function finishProcessingJob($as = null, $timestamp = null)
-    {
-        if (! $this->processingJob) {
-            return;
-        }
-
-        $timestamp ??= CarbonImmutable::now('UTC');
-
-        $this->events->emit([
-            '_cloud_event' => 'queue',
-            'timestamp' => $timestamp->toDateTimeString('microsecond'),
-            'type' => $as ?? match (true) {
-                $this->processingJob->hasFailed() => 'failed',
-                $this->processingJob->isReleased() => 'released',
-                default => 'processed',
-            },
-            'queue' => $this->processingQueue,
-            'duration_ms' => (int) $this->processingJobStartedAt->diffInMilliseconds($timestamp),
-        ]);
-
-        $this->processingQueue
-            = $this->processingJob
-            = $this->processingJobStartedAt
-            = null;
-    }
 
     /**
      * Handle a job being popped.
