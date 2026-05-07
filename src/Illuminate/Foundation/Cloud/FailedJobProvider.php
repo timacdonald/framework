@@ -4,12 +4,10 @@ namespace Illuminate\Foundation\Cloud;
 
 use Carbon\CarbonImmutable;
 use DateTimeInterface;
-use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Queue\Failed\CountableFailedJobProvider;
 use Illuminate\Queue\Failed\FailedJobProviderInterface;
 use Illuminate\Queue\Failed\PrunableFailedJobProvider;
-use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Str;
 use RuntimeException;
 
@@ -21,13 +19,6 @@ class FailedJobProvider implements FailedJobProviderInterface, CountableFailedJo
      * @var ?\Illuminate\Foundation\Cloud\Queue
      */
     protected $queue = null;
-
-    /**
-     * The loaded failed jobs keyed by ID.
-     *
-     * @var array<string, object>
-     */
-    protected $loadedFailedJobs = [];
 
     /**
      * Create a new instance.
@@ -105,18 +96,11 @@ class FailedJobProvider implements FailedJobProviderInterface, CountableFailedJo
      */
     public function find($id)
     {
-        if (! str_starts_with($id, 'https://app.dev-laravel.cloud/')) {
+        if (! Crypt::appearsEncrypted($id)) {
             return $this->failer->find($id);
         }
 
-        $response = Http::connectTimeout(10)
-            ->timeout(10)
-            ->retry(3, 1000, fn ($exception) => $exception instanceof ConnectionException)
-            ->acceptJson()
-            ->throw()
-            ->get($id);
-
-        return $this->loadedFailedJobs[$id] = $response->object();
+        return rescue(fn () => json_decode(Crypt::decryptString($id)));
     }
 
     /**
@@ -127,24 +111,20 @@ class FailedJobProvider implements FailedJobProviderInterface, CountableFailedJo
      */
     public function forget($id)
     {
-        Log::info('Forgetting failed job: '.$id);
-        if (! isset($this->loadedFailedJobs[$id])) {
-            Log::info('Failed job not found: '.$id);
-
+        if (! Crypt::appearsEncrypted($id)) {
             return $this->failer->forget($id);
         }
 
-        $job = $this->loadedFailedJobs[$id];
-        unset($this->loadedFailedJobs[$id]);
+        if (is_null($job = $this->find($id))) {
+            return false;
+        }
 
-        $this->events->emit($payload = [
+        $this->events->emit([
             '_cloud_event' => 'failed_job',
             'id' => $job->id,
             'queue' => $job->queue,
             'retried_at' => CarbonImmutable::now('UTC')->toDateTimeString('microsecond'),
         ]);
-
-        Log::info('Successfully retried failed job: '.$id, $payload);
 
         return true;
     }
