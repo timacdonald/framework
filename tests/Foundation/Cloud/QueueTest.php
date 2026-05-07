@@ -18,7 +18,7 @@ use Orchestra\Testbench\TestCase;
 use Ramsey\Uuid\Uuid;
 use RuntimeException;
 
-class QueuesTest extends TestCase
+class QueueTest extends TestCase
 {
     protected function defineEnvironment($app)
     {
