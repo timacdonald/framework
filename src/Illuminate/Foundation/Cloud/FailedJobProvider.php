@@ -4,11 +4,12 @@ namespace Illuminate\Foundation\Cloud;
 
 use Carbon\CarbonImmutable;
 use DateTimeInterface;
+use Illuminate\Contracts\Encryption\Encrypter;
+use Illuminate\Contracts\Encryption\StringEncrypter;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Queue\Failed\CountableFailedJobProvider;
 use Illuminate\Queue\Failed\FailedJobProviderInterface;
 use Illuminate\Queue\Failed\PrunableFailedJobProvider;
-use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 use RuntimeException;
@@ -35,6 +36,7 @@ class FailedJobProvider implements FailedJobProviderInterface, CountableFailedJo
     public function __construct(
         protected FailedJobProviderInterface $failer,
         protected Events $events,
+        protected Encrypter&StringEncrypter $encrypter,
     ) {
         //
     }
@@ -115,7 +117,7 @@ class FailedJobProvider implements FailedJobProviderInterface, CountableFailedJo
             ->throw()
             ->get($id);
 
-        return $this->loadedFailedJobs[$id] = json_decode(Crypt::decryptString($response->body()), flags: JSON_THROW_ON_ERROR);
+        return $this->loadedFailedJobs[$id] = json_decode($this->encrypter->decryptString($response->body()), flags: JSON_THROW_ON_ERROR);
     }
 
     /**

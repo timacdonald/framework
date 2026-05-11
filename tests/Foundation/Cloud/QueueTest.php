@@ -2,10 +2,12 @@
 
 namespace Tests\Tests\Foundation;
 
+use Illuminate\Contracts\Encryption\DecryptException;
 use Illuminate\Foundation\Cloud;
 use Illuminate\Foundation\Cloud\Events;
 use Illuminate\Foundation\Cloud\FailedJobProvider;
 use Illuminate\Foundation\Cloud\Queue;
+use Illuminate\Http\Client\RequestException;
 use Illuminate\Queue\Failed\FileFailedJobProvider;
 use Illuminate\Queue\Jobs\FakeJob;
 use Illuminate\Queue\SqsQueue;
@@ -18,6 +20,7 @@ use Illuminate\Support\Testing\Fakes\QueueFake;
 use Orchestra\Testbench\TestCase;
 use Ramsey\Uuid\Uuid;
 use RuntimeException;
+use Throwable;
 
 class QueueTest extends TestCase
 {
@@ -222,7 +225,7 @@ class QueueTest extends TestCase
         $queueFake = $this->fakeQueue();
         $queue = new Queue($queueFake, $eventsFake);
         $failerFake = $this->fakeFailer();
-        $failedJobProvider = new FailedJobProvider($failerFake, $eventsFake);
+        $failedJobProvider = new FailedJobProvider($failerFake, $eventsFake, $this->app['encrypter']);
         $failedJobProvider->setQueue($queue);
         $this->app[FailedJobProvider::class] = $failedJobProvider;
 
@@ -417,7 +420,7 @@ class QueueTest extends TestCase
     {
         $eventsFake = $this->fakeEvents();
         $failer = $this->fakeFailer();
-        $provider = new FailedJobProvider($failer, $eventsFake);
+        $provider = new FailedJobProvider($failer, $eventsFake, $this->app['encrypter']);
 
         $job = $provider->find('not-a-url');
 
@@ -428,7 +431,7 @@ class QueueTest extends TestCase
     {
         $eventsFake = $this->fakeEvents();
         $failer = $this->fakeFailer();
-        $provider = new FailedJobProvider($failer, $eventsFake);
+        $provider = new FailedJobProvider($failer, $eventsFake, $this->app['encrypter']);
 
         $payload = ['id' => 'test-job-id', 'connection' => 'sqs', 'queue' => 'default', 'payload' => '{"job":"App\\\\Jobs\\\\TestJob"}'];
         $encrypted = Crypt::encryptString(json_encode($payload));
@@ -451,37 +454,43 @@ class QueueTest extends TestCase
     {
         $eventsFake = $this->fakeEvents();
         $failer = $this->fakeFailer();
-        $provider = new FailedJobProvider($failer, $eventsFake);
+        $provider = new FailedJobProvider($failer, $eventsFake, $this->app['encrypter']);
 
         Http::fake([
             'https://cloud.laravel.com/*' => Http::response('not-valid-encrypted-data'),
         ]);
 
-        $job = $provider->find('https://cloud.laravel.com/api/jobs/test-job-id?signature=abc');
-
-        $this->assertNull($job);
+        try {
+            $provider->find('https://cloud.laravel.com/api/jobs/test-job-id?signature=abc');
+            $this->fail();
+        } catch (Throwable $e) {
+            $this->assertInstanceOf(DecryptException::class, $e);
+        }
     }
 
     public function testFindReturnsNullWhenHttpRequestFails()
     {
         $eventsFake = $this->fakeEvents();
         $failer = $this->fakeFailer();
-        $provider = new FailedJobProvider($failer, $eventsFake);
+        $provider = new FailedJobProvider($failer, $eventsFake, $this->app['encrypter']);
 
         Http::fake([
             'https://cloud.laravel.com/*' => Http::response('Server Error', 500),
         ]);
 
-        $job = $provider->find('https://cloud.laravel.com/api/jobs/test-job-id?signature=abc');
-
-        $this->assertNull($job);
+        try {
+            $provider->find('https://cloud.laravel.com/api/jobs/test-job-id?signature=abc');
+            $this->fail();
+        } catch (Throwable $e) {
+            $this->assertInstanceOf(RequestException::class, $e);
+        }
     }
 
     public function testForgetProxiesToFailerForNonUrls()
     {
         $eventsFake = $this->fakeEvents();
         $failer = $this->fakeFailer();
-        $provider = new FailedJobProvider($failer, $eventsFake);
+        $provider = new FailedJobProvider($failer, $eventsFake, $this->app['encrypter']);
 
         // First log a job to the failer with a UUID
         $uuid = (string) Str::uuid();
@@ -500,7 +509,7 @@ class QueueTest extends TestCase
         $this->travelTo('2000-01-02 03:04:05.060708');
         $eventsFake = $this->fakeEvents();
         $failer = $this->fakeFailer();
-        $provider = new FailedJobProvider($failer, $eventsFake);
+        $provider = new FailedJobProvider($failer, $eventsFake, $this->app['encrypter']);
 
         $payload = ['id' => 'forget-test-id', 'connection' => 'sqs', 'queue' => 'default', 'payload' => '{}'];
         $encrypted = Crypt::encryptString(json_encode($payload));
@@ -528,7 +537,7 @@ class QueueTest extends TestCase
     {
         $eventsFake = $this->fakeEvents();
         $failer = $this->fakeFailer();
-        $provider = new FailedJobProvider($failer, $eventsFake);
+        $provider = new FailedJobProvider($failer, $eventsFake, $this->app['encrypter']);
 
         $result = $provider->forget('https://cloud.laravel.com/api/jobs/some-id?signature=abc');
 
