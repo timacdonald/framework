@@ -4,7 +4,6 @@ namespace Illuminate\Foundation\Cloud;
 
 use Carbon\CarbonImmutable;
 use DateTimeInterface;
-use Illuminate\Contracts\Encryption\Encrypter;
 use Illuminate\Contracts\Encryption\StringEncrypter;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Queue\Failed\CountableFailedJobProvider;
@@ -36,7 +35,7 @@ class FailedJobProvider implements FailedJobProviderInterface, CountableFailedJo
     public function __construct(
         protected FailedJobProviderInterface $failer,
         protected Events $events,
-        protected Encrypter&StringEncrypter $encrypter,
+        protected StringEncrypter $encrypter,
     ) {
         //
     }
