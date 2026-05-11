@@ -4,10 +4,12 @@ namespace Illuminate\Foundation\Cloud;
 
 use Carbon\CarbonImmutable;
 use DateTimeInterface;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Queue\Failed\CountableFailedJobProvider;
 use Illuminate\Queue\Failed\FailedJobProviderInterface;
 use Illuminate\Queue\Failed\PrunableFailedJobProvider;
 use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 use RuntimeException;
 
@@ -19,6 +21,13 @@ class FailedJobProvider implements FailedJobProviderInterface, CountableFailedJo
      * @var ?\Illuminate\Foundation\Cloud\Queue
      */
     protected $queue = null;
+
+    /**
+     * The loaded failed jobs keyed by ID.
+     *
+     * @var array<string, object>
+     */
+    protected $loadedFailedJobs = [];
 
     /**
      * Create a new instance.
@@ -96,11 +105,19 @@ class FailedJobProvider implements FailedJobProviderInterface, CountableFailedJo
      */
     public function find($id)
     {
-        if (! Crypt::appearsEncrypted($id)) {
+        if (! str_starts_with($id, 'https://')) {
             return $this->failer->find($id);
         }
 
-        return rescue(fn () => json_decode(Crypt::decryptString($id)));
+        return rescue(function () use ($id) {
+            $response = Http::connectTimeout(10)
+                ->timeout(10)
+                ->retry(3, 1000, fn ($exception) => $exception instanceof ConnectionException)
+                ->throw()
+                ->get($id);
+
+            return $this->loadedFailedJobs[$id] = json_decode(Crypt::decryptString($response->body()));
+        });
     }
 
     /**
@@ -111,11 +128,11 @@ class FailedJobProvider implements FailedJobProviderInterface, CountableFailedJo
      */
     public function forget($id)
     {
-        if (! Crypt::appearsEncrypted($id)) {
+        if (! str_starts_with($id, 'https://')) {
             return $this->failer->forget($id);
         }
 
-        if (is_null($job = $this->find($id))) {
+        if (is_null($job = $this->loadedFailedJobs[$id] ?? null)) {
             return false;
         }
 

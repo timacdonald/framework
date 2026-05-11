@@ -12,6 +12,7 @@ use Illuminate\Queue\SqsQueue;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 use Illuminate\Support\Testing\Fakes\QueueFake;
 use Orchestra\Testbench\TestCase;
@@ -412,48 +413,71 @@ class QueueTest extends TestCase
 
     }
 
-    public function testFindProxiesToFailerForNonEncryptedIds()
+    public function testFindProxiesToFailerForNonUrls()
     {
         $eventsFake = $this->fakeEvents();
         $failer = $this->fakeFailer();
         $provider = new FailedJobProvider($failer, $eventsFake);
 
-        $job = $provider->find('not-an-encrypted-payload');
+        $job = $provider->find('not-a-url');
 
         $this->assertNull($job);
     }
 
-    public function testFindDecryptsEncryptedPayload()
+    public function testFindGetsUrlAndDecryptsResponse()
     {
         $eventsFake = $this->fakeEvents();
         $failer = $this->fakeFailer();
         $provider = new FailedJobProvider($failer, $eventsFake);
 
-        $encrypted = Crypt::encryptString(json_encode(['id' => 'test-job-id', 'queue' => 'default', 'payload' => '{"job":"App\\\\Jobs\\\\TestJob"}']));
+        $payload = ['id' => 'test-job-id', 'connection' => 'sqs', 'queue' => 'default', 'payload' => '{"job":"App\\\\Jobs\\\\TestJob"}'];
+        $encrypted = Crypt::encryptString(json_encode($payload));
 
-        $result = $provider->find($encrypted);
+        Http::fake([
+            'https://cloud.laravel.com/*' => Http::response($encrypted),
+        ]);
+
+        $result = $provider->find('https://cloud.laravel.com/api/jobs/test-job-id?signature=abc');
 
         $this->assertIsObject($result);
         $this->assertSame('test-job-id', $result->id);
+        $this->assertSame('sqs', $result->connection);
         $this->assertSame('default', $result->queue);
         $this->assertSame('{"job":"App\\\\Jobs\\\\TestJob"}', $result->payload);
+        Http::assertSent(fn ($request) => $request->url() === 'https://cloud.laravel.com/api/jobs/test-job-id?signature=abc');
     }
 
-    public function testFindReturnsNullForInvalidEncryptedPayload()
+    public function testFindReturnsNullWhenDecryptionFails()
     {
         $eventsFake = $this->fakeEvents();
         $failer = $this->fakeFailer();
         $provider = new FailedJobProvider($failer, $eventsFake);
 
-        // Create a value that appears encrypted (valid base64 JSON with iv, value, mac) but can't actually be decrypted
-        $tampered = base64_encode(json_encode(['iv' => 'fake', 'value' => 'fake', 'mac' => 'fake']));
+        Http::fake([
+            'https://cloud.laravel.com/*' => Http::response('not-valid-encrypted-data'),
+        ]);
 
-        $job = $provider->find($tampered);
+        $job = $provider->find('https://cloud.laravel.com/api/jobs/test-job-id?signature=abc');
 
         $this->assertNull($job);
     }
 
-    public function testForgetProxiesToFailerForNonEncryptedIds()
+    public function testFindReturnsNullWhenHttpRequestFails()
+    {
+        $eventsFake = $this->fakeEvents();
+        $failer = $this->fakeFailer();
+        $provider = new FailedJobProvider($failer, $eventsFake);
+
+        Http::fake([
+            'https://cloud.laravel.com/*' => Http::response('Server Error', 500),
+        ]);
+
+        $job = $provider->find('https://cloud.laravel.com/api/jobs/test-job-id?signature=abc');
+
+        $this->assertNull($job);
+    }
+
+    public function testForgetProxiesToFailerForNonUrls()
     {
         $eventsFake = $this->fakeEvents();
         $failer = $this->fakeFailer();
@@ -471,17 +495,23 @@ class QueueTest extends TestCase
         $this->assertEmpty($failer->ids());
     }
 
-    public function testForgetDecryptsAndEmitsEvent()
+    public function testForgetEmitsEventAfterFind()
     {
         $this->travelTo('2000-01-02 03:04:05.060708');
         $eventsFake = $this->fakeEvents();
         $failer = $this->fakeFailer();
         $provider = new FailedJobProvider($failer, $eventsFake);
 
-        $jobData = (object) ['id' => 'forget-test-id', 'queue' => 'default'];
-        $encrypted = Crypt::encryptString(json_encode($jobData));
+        $payload = ['id' => 'forget-test-id', 'connection' => 'sqs', 'queue' => 'default', 'payload' => '{}'];
+        $encrypted = Crypt::encryptString(json_encode($payload));
 
-        $result = $provider->forget($encrypted);
+        Http::fake([
+            'https://cloud.laravel.com/*' => Http::response($encrypted),
+        ]);
+
+        $url = 'https://cloud.laravel.com/api/jobs/forget-test-id?signature=abc';
+        $provider->find($url);
+        $result = $provider->forget($url);
 
         $this->assertTrue($result);
         $this->assertSame([
@@ -494,16 +524,13 @@ class QueueTest extends TestCase
         ], $eventsFake->emitted);
     }
 
-    public function testForgetReturnsFalseForInvalidEncryptedPayload()
+    public function testForgetReturnsFalseWithoutPriorFind()
     {
         $eventsFake = $this->fakeEvents();
         $failer = $this->fakeFailer();
         $provider = new FailedJobProvider($failer, $eventsFake);
 
-        // Create a value that appears encrypted but can't be decrypted
-        $tampered = base64_encode(json_encode(['iv' => 'fake', 'value' => 'fake', 'mac' => 'fake']));
-
-        $result = $provider->forget($tampered);
+        $result = $provider->forget('https://cloud.laravel.com/api/jobs/some-id?signature=abc');
 
         $this->assertFalse($result);
         $this->assertEmpty($eventsFake->emitted);
