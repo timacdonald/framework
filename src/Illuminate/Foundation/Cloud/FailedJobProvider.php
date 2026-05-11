@@ -109,15 +109,13 @@ class FailedJobProvider implements FailedJobProviderInterface, CountableFailedJo
             return $this->failer->find($id);
         }
 
-        return rescue(function () use ($id) {
-            $response = Http::connectTimeout(10)
-                ->timeout(10)
-                ->retry(3, 1000, fn ($exception) => $exception instanceof ConnectionException)
-                ->throw()
-                ->get($id);
+        $response = Http::connectTimeout(10)
+            ->timeout(10)
+            ->retry(3, 1000, fn ($exception) => $exception instanceof ConnectionException)
+            ->throw()
+            ->get($id);
 
-            return $this->loadedFailedJobs[$id] = json_decode(Crypt::decryptString($response->body()));
-        });
+        return $this->loadedFailedJobs[$id] = json_decode(Crypt::decryptString($response->body()), flags: JSON_THROW_ON_ERROR);
     }
 
     /**
