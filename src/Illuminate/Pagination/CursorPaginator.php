@@ -184,8 +184,7 @@ class CursorPaginator extends AbstractCursorPaginator implements Arrayable, Arra
     /**
      * Convert the object to pretty print formatted JSON.
      *
-     * @params int $options
-     *
+     * @param  int  $options
      * @return string
      */
     public function toPrettyJson(int $options = 0)

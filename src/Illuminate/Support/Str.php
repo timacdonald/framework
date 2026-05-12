@@ -1401,7 +1401,7 @@ class Str
      */
     public static function reverse(string $value)
     {
-        return implode(array_reverse(mb_str_split($value)));
+        return implode('', array_reverse(mb_str_split($value)));
     }
 
     /**
@@ -1448,7 +1448,7 @@ class Str
      */
     public static function headline($value)
     {
-        $parts = mb_split('\s+', $value);
+        $parts = preg_split('/\s+/u', $value, -1, PREG_SPLIT_NO_EMPTY);
 
         $parts = count($parts) > 1
             ? array_map(static::title(...), $parts)
@@ -1468,7 +1468,7 @@ class Str
      */
     public static function initials($value, $capitalize = false)
     {
-        $parts = mb_split("\s+", $value);
+        $parts = preg_split('/\s+/u', $value, -1, PREG_SPLIT_NO_EMPTY);
 
         $parts = array_map(fn ($part) => mb_substr($part, 0, 1), $parts);
 
@@ -1499,7 +1499,7 @@ class Str
 
         $endPunctuation = ['.', '!', '?', ':', '—', ','];
 
-        $words = mb_split('\s+', $value);
+        $words = preg_split('/\s+/u', $value, -1, PREG_SPLIT_NO_EMPTY);
         $wordCount = count($words);
 
         for ($i = 0; $i < $wordCount; $i++) {
@@ -1719,11 +1719,11 @@ class Str
             return static::$studlyCache[$key];
         }
 
-        $words = mb_split('\s+', static::replace(['-', '_'], ' ', $value));
+        $words = preg_split('/\s+/u', static::replace(['-', '_'], ' ', $value), -1, PREG_SPLIT_NO_EMPTY);
 
         $studlyWords = array_map(fn ($word) => static::ucfirst($word), $words);
 
-        return static::$studlyCache[$key] = implode($studlyWords);
+        return static::$studlyCache[$key] = implode('', $studlyWords);
     }
 
     /**
