@@ -55,11 +55,7 @@ class Queue implements QueueContract, ClearableQueue
         protected Events $events,
         protected array $config,
     ) {
-        $this->prefix = array_key_exists('prefix', $config) && is_string($config['prefix'])
-            ? $config['prefix'].'/'
-            : '';
-
-        $this->suffix = $config['suffix'] ?? '';
+        $this->prefix = $config['sqs']['prefix'].'/'
     }
 
     /**
@@ -259,7 +255,11 @@ class Queue implements QueueContract, ClearableQueue
      */
     public function setConfig($config)
     {
-        $this->queue->setConfig(...func_get_args());
+        $this->config = $config;
+
+        if (array_key_exists('sqs', $config)) {
+            $this->queue->setConfig($config['sqs']);
+        }
 
         return $this;
     }
@@ -379,7 +379,7 @@ class Queue implements QueueContract, ClearableQueue
     {
         return Str::of($this->queue->getQueue($queue))
             ->chopStart($this->prefix)
-            ->chopEnd($this->suffix)
+            ->chopEnd($this->config['sqs']['suffix'])
             ->toString();
     }
 
