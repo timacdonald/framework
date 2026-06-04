@@ -3,6 +3,7 @@
 namespace Illuminate\Foundation\Cloud;
 
 use Illuminate\Foundation\Cloud;
+use Illuminate\Support\Facades\Log;
 use RuntimeException;
 use Throwable;
 
@@ -49,7 +50,7 @@ class Events
 
             $this->write($this->format($payloads));
         } catch (Throwable $e) {
-            echo 'failed: '.$e;
+            Log::debug('failed: '.$e->getMessage());
         }
     }
 
@@ -60,7 +61,7 @@ class Events
      */
     protected function write(string $payload): void
     {
-        echo $payload.PHP_EOL;
+        Log::info('writing: '.$payload);
 
         $originalPayloadLength = strlen($payload);
         $written = 0;
