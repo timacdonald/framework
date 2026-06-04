@@ -47,9 +47,10 @@ class Events
         try {
             $this->ensureConnected();
 
+            echo 'writing';
             $this->write($this->format($payloads));
-        } catch (Throwable) {
-            //
+        } catch (Throwable $e) {
+            echo 'failed: '.$e;
         }
     }
 
