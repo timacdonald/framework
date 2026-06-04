@@ -78,6 +78,8 @@ class Events
             $written += $thisWrite;
 
             if ($written >= $originalPayloadLength) {
+                fflush($this->socket);
+
                 return;
             }
 
