@@ -47,7 +47,6 @@ class Events
         try {
             $this->ensureConnected();
 
-            echo 'writing';
             $this->write($this->format($payloads));
         } catch (Throwable $e) {
             echo 'failed: '.$e;
@@ -61,6 +60,8 @@ class Events
      */
     protected function write(string $payload): void
     {
+        echo $payload.PHP_EOL;
+
         $originalPayloadLength = strlen($payload);
         $written = 0;
         $zeroLengthWrites = 0;
