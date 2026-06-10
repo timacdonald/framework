@@ -31,6 +31,31 @@ class ApcWrapper
     }
 
     /**
+     * Store an item in the cache if the key doesn't exist.
+     *
+     * @param  string|array  $key
+     * @param  mixed  $value
+     * @param  int  $seconds
+     * @return bool
+     */
+    public function add($key, $value, $seconds)
+    {
+        return apcu_add($key, $value, $seconds);
+    }
+
+    /**
+     * Atomically fetch or generate a cache value.
+     *
+     * @param  string  $key
+     * @param  callable  $callback
+     * @param  ?int  $ttl
+     */
+    public function entry($key, $callback, $ttl)
+    {
+        return apc_entry($key, $callback, $ttl);
+    }
+
+    /**
      * Increment the value of an item in the cache.
      *
      * @param  string  $key

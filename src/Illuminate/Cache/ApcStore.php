@@ -2,9 +2,12 @@
 
 namespace Illuminate\Cache;
 
-class ApcStore extends TaggableStore
+use Illuminate\Contracts\Cache\LockProvider;
+
+class ApcStore extends TaggableStore implements LockProvider
 {
-    use RetrievesMultipleKeys;
+    // flush locks contract via prefix and iterator?
+    use HasCacheLock;
 
     /**
      * The APC wrapper instance.
@@ -44,6 +47,22 @@ class ApcStore extends TaggableStore
     }
 
     /**
+     * Retrieve multiple items from the cache by key.
+     *
+     * Items not found in the cache will have a null value.
+     *
+     * @return array
+     */
+    public function many(array $keys)
+    {
+        if ($keys === []) {
+            return [];
+       }
+
+        return $this->apc->get($keys);
+    }
+
+    /**
      * Store an item in the cache for a given number of seconds.
      *
      * @param  string  $key
@@ -54,6 +73,32 @@ class ApcStore extends TaggableStore
     public function put($key, $value, $seconds)
     {
         return $this->apc->put($this->prefix.$key, $value, $seconds);
+    }
+
+    /**
+     * Store multiple items in the cache for a given number of seconds.
+     *
+     * @param  array  $values
+     * @param  int  $seconds
+     * @return bool
+     */
+    public function putMany(array $values, $seconds);
+    {
+        // TODO prefixes everywhere?
+        return $this->apc->put($values, ttl: $seconds);
+    }
+
+    /**
+     * Store an item in the cache if the key doesn't exist.
+     *
+     * @param  string  $key
+     * @param  mixed  $value
+     * @param  int  $seconds
+     * @return bool
+     */
+    public function add($key, $value, $seconds)
+    {
+        return $this->apc->add($key, $value, $seconds);
     }
 
     /**
@@ -129,6 +174,19 @@ class ApcStore extends TaggableStore
     public function flush()
     {
         return $this->apc->flush();
+    }
+
+    /**
+     * Get a lock instance.
+     *
+     * @param  string  $name
+     * @param  int  $seconds
+     * @param  string|null  $owner
+     * @return \Illuminate\Contracts\Cache\Lock
+     */
+    public function lock($name, $seconds = 0, $owner = null)
+    {
+        return new ApcLock($this->apc, $name, $seconds, $owner);
     }
 
     /**
