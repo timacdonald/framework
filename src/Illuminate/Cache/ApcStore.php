@@ -6,7 +6,6 @@ use Illuminate\Contracts\Cache\LockProvider;
 
 class ApcStore extends TaggableStore implements LockProvider
 {
-    // flush locks contract via prefix and iterator?
     use HasCacheLock;
 
     /**
@@ -82,7 +81,7 @@ class ApcStore extends TaggableStore implements LockProvider
      * @param  int  $seconds
      * @return bool
      */
-    public function putMany(array $values, $seconds);
+    public function putMany(array $values, $seconds)
     {
         // TODO prefixes everywhere?
         return $this->apc->put($values, ttl: $seconds);
