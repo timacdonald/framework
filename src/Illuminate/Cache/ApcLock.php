@@ -31,8 +31,10 @@ class ApcLock extends Lock
     {
         $this->apc->entry('TODO', function () {
             if ($this->apc->get($this->name) === $this->owner) {
-                $this->apc->delete($this->name);
+                return $this->apc->delete($this->name);
             }
+
+            return false;
         }, 1); // TTL thoughts? will this cause issues? What happens when we cache null?
     }
 
