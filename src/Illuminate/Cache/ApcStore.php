@@ -84,7 +84,7 @@ class ApcStore extends TaggableStore implements LockProvider
     public function putMany(array $values, $seconds)
     {
         // TODO prefixes everywhere?
-        return $this->apc->put($values, ttl: $seconds);
+        return $this->apc->put($values, null, $seconds);
     }
 
     /**

@@ -20,7 +20,7 @@ class ApcWrapper
     /**
      * Store an item in the cache.
      *
-     * @param  string  $key
+     * @param  string|array  $key
      * @param  mixed  $value
      * @param  int  $seconds
      * @return bool

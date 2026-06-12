@@ -36,10 +36,10 @@ class CacheApcStoreTest extends TestCase
     public function testGetMultipleReturnsNullWhenNotFoundAndValueWhenFound()
     {
         $apc = $this->getMockBuilder(ApcWrapper::class)->onlyMethods(['get'])->getMock();
-        $apc->expects($this->exactly(3))->method('get')->willReturnMap([
-            ['foo', 'qux'],
-            ['bar', null],
-            ['baz', 'norf'],
+        $apc->expects($this->once())->method('get')->willReturn([
+            'foo' => 'qux',
+            'bar' => null,
+            'baz' => 'norf',
         ]);
         $store = new ApcStore($apc);
         $this->assertEquals([
@@ -66,17 +66,11 @@ class CacheApcStoreTest extends TestCase
 
         $apc->shouldReceive('put')
             ->once()
-            ->with('foo', 'bar', 60)
-            ->andReturn(true);
-
-        $apc->shouldReceive('put')
-            ->once()
-            ->with('baz', 'qux', 60)
-            ->andReturn(true);
-
-        $apc->shouldReceive('put')
-            ->once()
-            ->with('bar', 'norf', 60)
+            ->with([
+                'foo' => 'bar',
+                'baz' => 'qux',
+                'bar' => 'norf',
+            ], null, 60)
             ->andReturn(true);
 
         $store = new ApcStore($apc);
