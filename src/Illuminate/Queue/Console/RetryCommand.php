@@ -6,6 +6,7 @@ use DateTimeInterface;
 use Illuminate\Console\Command;
 use Illuminate\Contracts\Encryption\Encrypter;
 use Illuminate\Queue\Events\JobRetryRequested;
+use Illuminate\Queue\Failed\BulkForgetFailedJobProvider;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
 use RuntimeException;
@@ -47,18 +48,72 @@ class RetryCommand extends Command
         foreach ($ids as $id) {
             $job = $this->laravel['queue.failer']->find($id);
 
-            if (is_null($job)) {
-                $this->components->error("Unable to find failed job with ID [{$id}].");
-            } else {
-                $this->laravel['events']->dispatch(new JobRetryRequested($job));
-
-                $this->components->task($id, fn () => $this->retryJob($job));
-
-                $this->laravel['queue.failer']->forget($id);
-            }
+            match (true) {
+                is_null($job) => $this->components->error("Unable to find failed job with ID [{$id}]."),
+                $job instanceof Collection => $this->handleRetryingCollectionOfJobs($id, $job),
+                default => $this->handleRetryingSingleJob($id, $job),
+            };
         }
 
         $jobsFound ? $this->newLine() : $this->components->info('No retryable jobs found.');
+    }
+
+    /**
+     * Retry the given collection of failed jobs, keyed by their IDs.
+     *
+     * @param  string  $id
+     * @param  \Illuminate\Support\Collection  $jobs
+     * @return void
+     */
+    protected function handleRetryingCollectionOfJobs($id, $jobs)
+    {
+        $jobs->each(fn ($job) => $this->laravel['events']->dispatch(new JobRetryRequested($job)));
+
+        $this->components->task($id, fn () => $this->retryJobs($jobs));
+
+        $this->laravel['queue.failer'] instanceof BulkForgetFailedJobProvider
+            ? $this->laravel['queue.failer']->forgetMany($jobs->keys()->all())
+            : $jobs->keys()->each(fn ($jobId) => $this->laravel['queue.failer']->forget($jobId));
+    }
+
+    /**
+     * Retry the given single failed job.
+     *
+     * @param  string  $id
+     * @param  \stdClass  $job
+     * @return void
+     */
+    protected function handleRetryingSingleJob($id, $job)
+    {
+        $this->laravel['events']->dispatch(new JobRetryRequested($job));
+
+        $this->components->task($id, fn () => $this->retryJob($job));
+
+        $this->laravel['queue.failer']->forget($id);
+    }
+
+    /**
+     * Push the given failed jobs back onto their original connections and queues.
+     *
+     * @param  \Illuminate\Support\Collection  $jobs
+     * @return void
+     */
+    protected function retryJobs($jobs)
+    {
+        $jobs->groupBy('connection')->each(function ($jobs, $connectionName) {
+            $queue = $this->laravel['queue']->connection($connectionName);
+
+            $jobs->groupBy('queue')->each(function ($jobs, $queueName) use ($queue) {
+                $messages = $jobs->map(fn ($job) => [
+                    'payload' => $this->refreshRetryUntil($this->resetAttempts($job->payload)),
+                    'options' => $this->getQueueableOptions($queue, $job),
+                ]);
+
+                method_exists($queue, 'pushBulkRaw')
+                    ? $queue->pushBulkRaw($messages->all(), $queueName)
+                    : $messages->each(fn ($message) => $queue->pushRaw($message['payload'], $queueName, $message['options']));
+            });
+        });
     }
 
     /**

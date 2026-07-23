@@ -1389,6 +1389,207 @@ class QueueSqsQueueTest extends TestCase
         $queue->bulk([], 'data', $this->queueName);
     }
 
+    public function testPushBulkRawSendsAllPayloadsInASingleBatchRequest()
+    {
+        $queue = $this->getMockBuilder(SqsQueue::class)
+            ->onlyMethods(['getQueue'])
+            ->setConstructorArgs([$this->sqs, $this->queueName, $this->account])
+            ->getMock();
+        $queue->setContainer(m::mock(Container::class));
+        $queue->expects($this->once())->method('getQueue')->with($this->queueName)->willReturn($this->queueUrl);
+
+        $captured = null;
+
+        $this->sqs->shouldReceive('sendMessageBatch')->once()->with(m::on(function ($args) use (&$captured) {
+            $captured = $args;
+
+            return true;
+        }))->andReturn(new Result([
+            'Successful' => [
+                ['Id' => '0', 'MessageId' => 'mid-0'],
+                ['Id' => '1', 'MessageId' => 'mid-1'],
+                ['Id' => '2', 'MessageId' => 'mid-2'],
+            ],
+            'Failed' => [],
+        ]));
+
+        $ids = $queue->pushBulkRaw(['p1', 'p2', 'p3'], $this->queueName);
+
+        $this->assertSame($this->queueUrl, $captured['QueueUrl']);
+        $this->assertSame(['p1', 'p2', 'p3'], array_column($captured['Entries'], 'MessageBody'));
+        $this->assertSame(['0', '1', '2'], array_column($captured['Entries'], 'Id'));
+        $this->assertSame(['mid-0', 'mid-1', 'mid-2'], $ids);
+    }
+
+    public function testPushBulkRawChunksAtTenMessagesPerBatch()
+    {
+        $queue = $this->getMockBuilder(SqsQueue::class)
+            ->onlyMethods(['getQueue'])
+            ->setConstructorArgs([$this->sqs, $this->queueName, $this->account])
+            ->getMock();
+        $queue->setContainer(m::mock(Container::class));
+        $queue->expects($this->once())->method('getQueue')->willReturn($this->queueUrl);
+
+        $batchSizes = [];
+
+        $this->sqs->shouldReceive('sendMessageBatch')->twice()->with(m::on(function ($args) use (&$batchSizes) {
+            $batchSizes[] = count($args['Entries']);
+
+            return true;
+        }))->andReturn(new Result(['Successful' => [], 'Failed' => []]));
+
+        $queue->pushBulkRaw(array_map(fn ($i) => "payload-{$i}", range(1, 15)), $this->queueName);
+
+        $this->assertSame([10, 5], $batchSizes);
+    }
+
+    public function testPushBulkRawChunksWhenCumulativePayloadSizeExceedsLimit()
+    {
+        $queue = $this->getMockBuilder(SqsQueue::class)
+            ->onlyMethods(['getQueue'])
+            ->setConstructorArgs([$this->sqs, $this->queueName, $this->account])
+            ->getMock();
+        $queue->setContainer(m::mock(Container::class));
+        $queue->expects($this->once())->method('getQueue')->willReturn($this->queueUrl);
+
+        $halfPayload = str_repeat('x', (int) (SqsQueue::MAX_SQS_PAYLOAD_SIZE * 0.6));
+
+        $batchSizes = [];
+
+        $this->sqs->shouldReceive('sendMessageBatch')->twice()->with(m::on(function ($args) use (&$batchSizes) {
+            $batchSizes[] = count($args['Entries']);
+
+            return true;
+        }))->andReturn(new Result(['Successful' => [], 'Failed' => []]));
+
+        $queue->pushBulkRaw([$halfPayload, $halfPayload], $this->queueName);
+
+        $this->assertSame([1, 1], $batchSizes);
+    }
+
+    public function testPushBulkRawAppliesSharedAndPerMessageOptions()
+    {
+        $queue = $this->getMockBuilder(SqsQueue::class)
+            ->onlyMethods(['getQueue'])
+            ->setConstructorArgs([$this->sqs, $this->fifoQueueName, $this->account])
+            ->getMock();
+        $queue->setContainer(m::mock(Container::class));
+        $queue->expects($this->once())->method('getQueue')->willReturn($this->fifoQueueUrl);
+
+        $captured = null;
+
+        $this->sqs->shouldReceive('sendMessageBatch')->once()->with(m::on(function ($args) use (&$captured) {
+            $captured = $args;
+
+            return true;
+        }))->andReturn(new Result(['Successful' => [], 'Failed' => []]));
+
+        $queue->pushBulkRaw([
+            'p1',
+            ['payload' => 'p2', 'options' => ['MessageGroupId' => 'group-2', 'MessageDeduplicationId' => 'dedupe-2']],
+        ], $this->fifoQueueName, ['MessageGroupId' => 'group-1']);
+
+        $this->assertSame(['p1', 'p2'], array_column($captured['Entries'], 'MessageBody'));
+
+        // The shared options apply to every message, while per-message options take precedence...
+        $this->assertSame('group-1', $captured['Entries'][0]['MessageGroupId']);
+        $this->assertArrayNotHasKey('MessageDeduplicationId', $captured['Entries'][0]);
+        $this->assertSame('group-2', $captured['Entries'][1]['MessageGroupId']);
+        $this->assertSame('dedupe-2', $captured['Entries'][1]['MessageDeduplicationId']);
+    }
+
+    public function testPushBulkRawThrowsWhenSqsReportsFailedEntries()
+    {
+        $queue = $this->getMockBuilder(SqsQueue::class)
+            ->onlyMethods(['getQueue'])
+            ->setConstructorArgs([$this->sqs, $this->queueName, $this->account])
+            ->getMock();
+        $queue->setContainer(m::mock(Container::class));
+        $queue->expects($this->once())->method('getQueue')->willReturn($this->queueUrl);
+
+        $this->sqs->shouldReceive('sendMessageBatch')->once()->andReturnUsing(function ($args) {
+            return new Result([
+                'Successful' => [],
+                'Failed' => [
+                    ['Id' => $args['Entries'][0]['Id'], 'Code' => 'InternalError', 'Message' => 'oops', 'SenderFault' => false],
+                ],
+            ]);
+        });
+
+        try {
+            $queue->pushBulkRaw(['p1'], $this->queueName);
+
+            $this->fail('SqsException was not thrown.');
+        } catch (SqsException $e) {
+            $this->assertSame(
+                'SQS SendMessageBatch rejected [1] of [1] messages. First failure [InternalError]: oops',
+                $e->getMessage()
+            );
+            $this->assertSame('InternalError', $e->getAwsErrorCode());
+            $this->assertSame('oops', $e->getAwsErrorMessage());
+            $this->assertNotNull($e->getResult());
+        }
+    }
+
+    public function testPushBulkRawStopsSendingBatchesAfterAFailedRequest()
+    {
+        $queue = $this->getMockBuilder(SqsQueue::class)
+            ->onlyMethods(['getQueue'])
+            ->setConstructorArgs([$this->sqs, $this->queueName, $this->account])
+            ->getMock();
+        $queue->setContainer(m::mock(Container::class));
+        $queue->expects($this->once())->method('getQueue')->willReturn($this->queueUrl);
+
+        // Only the first chunk is attempted; its exception propagates untouched and later chunks are not sent.
+        $this->sqs->shouldReceive('sendMessageBatch')->once()->andThrow(new RuntimeException('SQS is down'));
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('SQS is down');
+
+        $queue->pushBulkRaw(array_map(fn ($i) => "payload-{$i}", range(1, 15)), $this->queueName);
+    }
+
+    public function testPushBulkRawStoresPayloadToCacheWhenExceedingThreshold()
+    {
+        $uuid = 'test-uuid-bulk-raw';
+        $largePayload = json_encode(['uuid' => $uuid, 'job' => 'App\\Jobs\\TestJob', 'data' => str_repeat('x', SqsQueue::MAX_SQS_PAYLOAD_SIZE)]);
+        $expectedPath = 'laravel:sqs-payloads:'.$uuid;
+        $expectedPointer = json_encode(['@pointer' => $expectedPath]);
+
+        $store = m::mock(CacheRepository::class);
+        $store->shouldReceive('put')->once()->with($expectedPath, $largePayload);
+
+        $cache = m::mock(CacheFactory::class);
+        $cache->shouldReceive('store')->with('database')->andReturn($store);
+
+        $container = m::mock(Container::class);
+        $container->shouldReceive('make')->with('cache')->andReturn($cache);
+
+        $queue = new SqsQueue($this->sqs, $this->queueName, $this->prefix, '', false, [
+            'enabled' => true,
+            'store' => 'database',
+            'always' => false,
+            'delete_after_processing' => true,
+        ]);
+        $queue->setContainer($container);
+
+        $this->sqs->shouldReceive('sendMessageBatch')->once()->withArgs(function ($args) use ($expectedPointer) {
+            return array_column($args['Entries'], 'MessageBody') === ['small-payload', $expectedPointer];
+        })->andReturn(new Result(['Successful' => [], 'Failed' => []]));
+
+        $queue->pushBulkRaw(['small-payload', $largePayload], $this->queueName);
+    }
+
+    public function testPushBulkRawDoesNothingWithEmptyInput()
+    {
+        $queue = new SqsQueue($this->sqs, $this->queueName, $this->account);
+        $queue->setContainer(m::mock(Container::class));
+
+        $this->sqs->shouldNotReceive('sendMessageBatch');
+
+        $this->assertSame([], $queue->pushBulkRaw([], $this->queueName));
+    }
+
     public function testPopPassesOverflowStorageOptionsToJob()
     {
         $overflowStorage = [

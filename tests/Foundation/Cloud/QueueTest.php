@@ -25,12 +25,15 @@ use Illuminate\Http\Client\RequestException;
 use Illuminate\Queue\Connectors\ConnectorInterface;
 use Illuminate\Queue\Connectors\SqsConnector;
 use Illuminate\Queue\Events\WorkerStopping;
+use Illuminate\Queue\Failed\BulkForgetFailedJobProvider;
+use Illuminate\Queue\Failed\FailedJobProviderInterface as QueueFailedJobProviderInterface;
 use Illuminate\Queue\Failed\FileFailedJobProvider;
 use Illuminate\Queue\Jobs\FakeJob;
 use Illuminate\Queue\Jobs\SqsJob;
 use Illuminate\Queue\SqsQueue;
 use Illuminate\Queue\Worker;
 use Illuminate\Queue\WorkerStopReason;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Crypt;
@@ -226,7 +229,7 @@ class QueueTest extends TestCase
 
         $queue->pop();
 
-        $this->assertSame([], $eventsFake->emitted);
+        $this->assertSame([], $eventsFake->emitted());
     }
 
     public function testItEmitsStartedEventWhenJobIsSuccessfullyPopped()
@@ -243,7 +246,7 @@ class QueueTest extends TestCase
             'timestamp' => '2000-01-02 03:04:05.060708',
             'type' => 'started',
             'queue' => 'default',
-        ]], $eventsFake->emitted);
+        ]], $eventsFake->emitted());
     }
 
     public function testItEmitsProcessedEventWhenNextJobIsAboutToPop()
@@ -271,7 +274,7 @@ class QueueTest extends TestCase
                 'queue' => 'default',
                 'duration_ms' => 1000,
             ],
-        ], $eventsFake->emitted);
+        ], $eventsFake->emitted());
     }
 
     public function testItDoesNotEmitEventsForTheSameJobAfterItHasBeenProcessed()
@@ -286,7 +289,7 @@ class QueueTest extends TestCase
         $queue->pop();
         $queue->pop();
 
-        $this->assertCount(2, $eventsFake->emitted);
+        $this->assertCount(2, $eventsFake->emitted());
     }
 
     public function testItRemembersTheQueueForTheProcessedEvent()
@@ -334,7 +337,7 @@ class QueueTest extends TestCase
                 'queue' => 'second',
                 'duration_ms' => 0,
             ],
-        ], $eventsFake->emitted);
+        ], $eventsFake->emitted());
     }
 
     public function testPopReceivesFromTheAgentForANonDefaultWorkerQueue()
@@ -451,7 +454,9 @@ class QueueTest extends TestCase
         Str::createUuidsNormally();
         $queue->pop();
 
-        unset($eventsFake->emitted[1]['exception']);
+        $emitted = $eventsFake->emitted();
+
+        unset($emitted[1]['exception']);
         $this->assertSame([
             [
                 '_cloud_event' => 'queue',
@@ -476,7 +481,7 @@ class QueueTest extends TestCase
                 'queue' => 'default',
                 'duration_ms' => 0,
             ],
-        ], $eventsFake->emitted);
+        ], $emitted);
     }
 
     public function testItEmitsReleasedJobEvents()
@@ -504,7 +509,7 @@ class QueueTest extends TestCase
                 'queue' => 'default',
                 'duration_ms' => 0,
             ],
-        ], $eventsFake->emitted);
+        ], $eventsFake->emitted());
     }
 
     public function testPopReturnsACloudJobBuiltFromTheAgentResponse()
@@ -971,7 +976,7 @@ class QueueTest extends TestCase
                 'type' => 'queued',
                 'queue' => '6',
             ],
-        ], $eventsFake->emitted);
+        ], $eventsFake->emitted());
     }
 
     public function testItEmitsReleasedEventWhenWorkerStopsBecauseItTimedOut()
@@ -1006,7 +1011,7 @@ class QueueTest extends TestCase
                     'queue' => 'default',
                     'duration_ms' => 2000,
                 ],
-            ], $eventsFake->emitted);
+            ], $eventsFake->emitted());
         } finally {
             $_SERVER['argv'] = $argv;
         }
@@ -1046,7 +1051,7 @@ class QueueTest extends TestCase
                     'type' => 'processed',
                     'queue' => 'default',
                     'duration_ms' => 0,
-                ], $eventsFake->emitted[($index * 2) + 1]);
+                ], $eventsFake->emitted()[($index * 2) + 1]);
             }
         } finally {
             $_SERVER['argv'] = $argv;
@@ -1084,7 +1089,7 @@ class QueueTest extends TestCase
                     'queue' => 'default',
                     'duration_ms' => 0,
                 ],
-            ], $eventsFake->emitted);
+            ], $eventsFake->emitted());
         } finally {
             $_SERVER['argv'] = $argv;
         }
@@ -1108,7 +1113,7 @@ class QueueTest extends TestCase
 
             $this->app['events']->dispatch(new WorkerStopping(0, null, WorkerStopReason::TimedOut));
 
-            $this->assertSame('failed', $eventsFake->emitted[1]['type']);
+            $this->assertSame('failed', $eventsFake->emitted()[1]['type']);
         } finally {
             $_SERVER['argv'] = $argv;
         }
@@ -1132,7 +1137,7 @@ class QueueTest extends TestCase
 
             $this->app['events']->dispatch(new WorkerStopping(0, null, WorkerStopReason::MaxJobsExceeded));
 
-            $this->assertSame('released', $eventsFake->emitted[1]['type']);
+            $this->assertSame('released', $eventsFake->emitted()[1]['type']);
         } finally {
             $_SERVER['argv'] = $argv;
         }
@@ -1152,7 +1157,7 @@ class QueueTest extends TestCase
             $this->app['events']->dispatch(new WorkerStopping(0, null, WorkerStopReason::TimedOut));
             $this->app['events']->dispatch(new WorkerStopping(0, null, WorkerStopReason::QueueEmpty));
 
-            $this->assertSame([], $eventsFake->emitted);
+            $this->assertSame([], $eventsFake->emitted());
         } finally {
             $_SERVER['argv'] = $argv;
         }
@@ -1182,7 +1187,7 @@ class QueueTest extends TestCase
                     'type' => 'started',
                     'queue' => 'default',
                 ],
-            ], $eventsFake->emitted);
+            ], $eventsFake->emitted());
         } finally {
             $_SERVER['argv'] = $argv;
         }
@@ -1256,7 +1261,7 @@ class QueueTest extends TestCase
                 'type' => 'queued',
                 'queue' => '6',
             ],
-        ], $eventsFake->emitted);
+        ], $eventsFake->emitted());
     }
 
     public function testItCapturesDurationForMultipleJobs()
@@ -1273,8 +1278,8 @@ class QueueTest extends TestCase
         $this->travel(0.5)->second();
         $queue->pop();
 
-        $this->assertSame(1000, $eventsFake->emitted[1]['duration_ms']);
-        $this->assertSame(500, $eventsFake->emitted[3]['duration_ms']);
+        $this->assertSame(1000, $eventsFake->emitted()[1]['duration_ms']);
+        $this->assertSame(500, $eventsFake->emitted()[3]['duration_ms']);
     }
 
     public function testItCapturesUtcTime()
@@ -1303,7 +1308,7 @@ class QueueTest extends TestCase
                 'queue' => 'default',
                 'duration_ms' => 1000,
             ],
-        ], $eventsFake->emitted);
+        ], $eventsFake->emitted());
     }
 
     public function testFindProxiesToFailerForNonUrls()
@@ -1420,7 +1425,7 @@ class QueueTest extends TestCase
                 'queue' => 'default',
                 'retried_at' => '2000-01-02 03:04:05.060708',
             ],
-        ], $eventsFake->emitted);
+        ], $eventsFake->emitted());
     }
 
     public function testForgetReturnsFalseWithoutPriorFind()
@@ -1432,7 +1437,165 @@ class QueueTest extends TestCase
         $result = $provider->forget('https://cloud.laravel.com/api/jobs/some-id?signature=abc');
 
         $this->assertFalse($result);
-        $this->assertEmpty($eventsFake->emitted);
+        $this->assertEmpty($eventsFake->emitted());
+    }
+
+    public function testForgetManyDoesNothingWhenGivenNoIds()
+    {
+        $eventsFake = $this->fakeEvents();
+        $failer = $this->fakeFailer();
+        $provider = new FailedJobProvider($failer, $eventsFake, $this->app['encrypter']);
+
+        $provider->forgetMany([]);
+
+        $this->assertSame([], $eventsFake->emitted());
+        $this->assertEmpty($failer->all());
+    }
+
+    public function testForgetManyDelegatesToTheFailerWhenItSupportsBulkForgetting()
+    {
+        $eventsFake = $this->fakeEvents();
+        $failer = new class implements QueueFailedJobProviderInterface, BulkForgetFailedJobProvider
+        {
+            public array $forgotten = [];
+
+            public function log($connection, $queue, $payload, $exception)
+            {
+                //
+            }
+
+            public function ids($queue = null)
+            {
+                return [];
+            }
+
+            public function all()
+            {
+                return [];
+            }
+
+            public function find($id)
+            {
+                return null;
+            }
+
+            public function forget($id)
+            {
+                return true;
+            }
+
+            public function flush($hours = null)
+            {
+                //
+            }
+
+            public function forgetMany(array $ids): void
+            {
+                $this->forgotten = $ids;
+            }
+        };
+        $provider = new FailedJobProvider($failer, $eventsFake, $this->app['encrypter']);
+
+        $provider->forgetMany(['1', '2', '3']);
+
+        $this->assertSame(['1', '2', '3'], $failer->forgotten);
+    }
+
+    public function testForgetManyForgetsEachJobIndividuallyWhenTheFailerDoesNotSupportBulkForgetting()
+    {
+        $eventsFake = $this->fakeEvents();
+        $failer = new class implements QueueFailedJobProviderInterface
+        {
+            public array $forgotten = [];
+
+            public function log($connection, $queue, $payload, $exception)
+            {
+                //
+            }
+
+            public function ids($queue = null)
+            {
+                return [];
+            }
+
+            public function all()
+            {
+                return [];
+            }
+
+            public function find($id)
+            {
+                return null;
+            }
+
+            public function forget($id)
+            {
+                $this->forgotten[] = $id;
+
+                return true;
+            }
+
+            public function flush($hours = null)
+            {
+                //
+            }
+        };
+        $provider = new FailedJobProvider($failer, $eventsFake, $this->app['encrypter']);
+
+        $provider->forgetMany(['1', '2', '3']);
+
+        $this->assertSame(['1', '2', '3'], $failer->forgotten);
+    }
+
+    public function testForgetManyEmitsAnEventForEachLoadedCloudJob()
+    {
+        $this->travelTo('2000-01-02 03:04:05.060708');
+        $eventsFake = $this->fakeEvents();
+        $failer = $this->fakeFailer();
+        $provider = new FailedJobProvider($failer, $eventsFake, $this->app['encrypter']);
+
+        $payloadOne = ['id' => 'job-1', 'connection' => 'cloud', 'queue' => 'default', 'payload' => '{}'];
+        $payloadTwo = ['id' => 'job-2', 'connection' => 'cloud', 'queue' => 'emails', 'payload' => '{}'];
+
+        Http::fake([
+            'https://cloud.laravel.com/api/jobs/job-1*' => Http::response(Crypt::encryptString(json_encode($payloadOne))),
+            'https://cloud.laravel.com/api/jobs/job-2*' => Http::response(Crypt::encryptString(json_encode($payloadTwo))),
+        ]);
+
+        $urlOne = 'https://cloud.laravel.com/api/jobs/job-1?signature=abc';
+        $urlTwo = 'https://cloud.laravel.com/api/jobs/job-2?signature=abc';
+
+        $provider->find($urlOne);
+        $provider->find($urlTwo);
+
+        $provider->forgetMany([$urlOne, $urlTwo]);
+
+        $this->assertCount(1, $eventsFake->writes);
+        $this->assertSame([
+            [
+                '_cloud_event' => 'failed_job',
+                'id' => 'job-1',
+                'queue' => 'default',
+                'retried_at' => '2000-01-02 03:04:05.060708',
+            ],
+            [
+                '_cloud_event' => 'failed_job',
+                'id' => 'job-2',
+                'queue' => 'emails',
+                'retried_at' => '2000-01-02 03:04:05.060708',
+            ],
+        ], $eventsFake->writes[0]);
+    }
+
+    public function testForgetManySkipsCloudJobsThatWereNeverLoaded()
+    {
+        $eventsFake = $this->fakeEvents();
+        $failer = $this->fakeFailer();
+        $provider = new FailedJobProvider($failer, $eventsFake, $this->app['encrypter']);
+
+        $provider->forgetMany(['https://cloud.laravel.com/api/jobs/never-loaded?signature=abc']);
+
+        $this->assertSame([], $eventsFake->emitted());
     }
 
     public function testItThrowsManagedQueueNotFoundExceptionWhenQueueDoesNotExist()
@@ -1494,7 +1657,7 @@ class QueueTest extends TestCase
 
         $queue->push(new FakeJob, queue: 'https://sqs.us-east-2.amazonaws.com/1234567/my-queue-env-8280cf2c-2081-47e8-a1f1-9cdfcba8618f');
 
-        $this->assertSame('my-queue', $eventsFake->emitted[0]['queue']);
+        $this->assertSame('my-queue', $eventsFake->emitted()[0]['queue']);
     }
 
     public function testItNormalizesFifoQueueNamesWithoutLeakingTheSuffix()
@@ -1509,7 +1672,7 @@ class QueueTest extends TestCase
 
         // The suffix is injected before ".fifo", so it must be stripped without
         // leaking into the normalized name.
-        $this->assertSame('orders.fifo', $eventsFake->emitted[0]['queue']);
+        $this->assertSame('orders.fifo', $eventsFake->emitted()[0]['queue']);
     }
 
     /**
@@ -1549,14 +1712,16 @@ class QueueTest extends TestCase
     {
         return $this->app->instance(Events::class, new class('test-socket') extends Events
         {
-            public array $emitted = [];
+            public array $writes = [];
 
             public function emitMany(array $payloads): void
             {
-                $this->emitted = [
-                    ...$this->emitted,
-                    ...$payloads,
-                ];
+                $this->writes[] = $payloads;
+            }
+
+            public function emitted(): array
+            {
+                return Arr::flatten($this->writes, 1);
             }
         });
     }

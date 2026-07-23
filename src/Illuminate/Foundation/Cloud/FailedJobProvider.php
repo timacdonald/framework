@@ -6,6 +6,7 @@ use Carbon\CarbonImmutable;
 use DateTimeInterface;
 use Illuminate\Contracts\Encryption\StringEncrypter;
 use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Queue\Failed\BulkForgetFailedJobProvider;
 use Illuminate\Queue\Failed\CountableFailedJobProvider;
 use Illuminate\Queue\Failed\FailedJobProviderInterface;
 use Illuminate\Queue\Failed\PrunableFailedJobProvider;
@@ -13,7 +14,7 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 use RuntimeException;
 
-class FailedJobProvider implements FailedJobProviderInterface, CountableFailedJobProvider, PrunableFailedJobProvider
+class FailedJobProvider implements FailedJobProviderInterface, CountableFailedJobProvider, PrunableFailedJobProvider, BulkForgetFailedJobProvider
 {
     /**
      * The connected queue instance.
@@ -145,6 +146,45 @@ class FailedJobProvider implements FailedJobProviderInterface, CountableFailedJo
         ]);
 
         return true;
+    }
+
+    /**
+     * Forget the failed jobs with the given IDs.
+     */
+    public function forgetMany(array $ids): void
+    {
+        if ($ids === []) {
+            return;
+        }
+
+        if (! str_starts_with($ids[0], 'https://')) {
+            if ($this->failer instanceof BulkForgetFailedJobProvider) {
+                $this->failer->forgetMany($ids);
+            } else {
+                foreach ($ids as $id) {
+                    $this->failer->forget($id);
+                }
+            }
+
+            return;
+        }
+
+        $events = [];
+
+        foreach ($ids as $id) {
+            if (is_null($job = $this->loadedFailedJobs[$id] ?? null)) {
+                continue;
+            }
+
+            $events[] = [
+                '_cloud_event' => 'failed_job',
+                'id' => $job->id,
+                'queue' => $job->queue,
+                'retried_at' => CarbonImmutable::now('UTC')->toDateTimeString('microsecond'),
+            ];
+        }
+
+        $this->events->emitMany($events);
     }
 
     /**

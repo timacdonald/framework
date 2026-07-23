@@ -286,6 +286,66 @@ class SqsQueue extends Queue implements QueueContract, ClearableQueue
     }
 
     /**
+     * Push an array of raw payloads onto the queue using the SendMessageBatch API.
+     *
+     * @param  array<int, string|array{payload: string, options?: array}>  $payloads
+     * @param  string|null  $queue
+     * @param  array  $options
+     * @return array<int, string>
+     *
+     * @throws \Aws\Sqs\Exception\SqsException
+     */
+    public function pushBulkRaw($payloads, $queue = null, array $options = [])
+    {
+        $payloads = array_values((array) $payloads);
+
+        if (empty($payloads)) {
+            return [];
+        }
+
+        $messages = [];
+
+        foreach ($payloads as $index => $payload) {
+            $payload = is_array($payload)
+                ? $payload
+                : ['payload' => $payload, 'options' => []];
+
+            if ($this->willOverflow($payload['payload'])) {
+                $payload['payload'] = $this->overflow($payload['payload']);
+            }
+
+            $messages[] = [
+                'Id' => (string) $index,
+                'MessageBody' => $payload['payload'],
+                ...$options,
+                ...$payload['options'],
+            ];
+        }
+
+        $queueUrl = $this->getQueue($queue);
+
+        $messageIds = [];
+
+        // Dispatch chunks and stop at the first failure so later messages cannot arrive ahead of unsent ones...
+        foreach ($this->chunkBatchEntries($messages) as $chunk) {
+            $result = $this->sqs->sendMessageBatch([
+                'QueueUrl' => $queueUrl,
+                'Entries' => $chunk,
+            ]);
+
+            foreach ($result['Successful'] ?? [] as $success) {
+                $messageIds[(int) $success['Id']] = $success['MessageId'];
+            }
+
+            $this->throwIfBatchEntriesFailed($result, $chunk, $queueUrl);
+        }
+
+        ksort($messageIds);
+
+        return $messageIds;
+    }
+
+    /**
      * Push a new job onto the queue after (n) seconds.
      *
      * @param  \DateTimeInterface|\DateInterval|int  $delay
@@ -426,27 +486,45 @@ class SqsQueue extends Queue implements QueueContract, ClearableQueue
                 );
             }
 
-            // A batch can return HTTP 200 while rejecting entries, so surface those failures as an SqsException...
-            if (! empty($result['Failed'])) {
-                $failure = $result['Failed'][0];
-
-                throw new SqsException(
-                    sprintf(
-                        'SQS SendMessageBatch rejected [%d] of [%d] messages. First failure [%s]: %s',
-                        count($result['Failed']),
-                        count($chunk),
-                        $failure['Code'] ?? 'Unknown',
-                        $failure['Message'] ?? '',
-                    ),
-                    new Command('SendMessageBatch', ['QueueUrl' => $queueUrl, 'Entries' => $chunk]),
-                    [
-                        'code' => $failure['Code'] ?? null,
-                        'message' => $failure['Message'] ?? null,
-                        'result' => $result,
-                    ],
-                );
-            }
+            $this->throwIfBatchEntriesFailed($result, $chunk, $queueUrl);
         }
+    }
+
+    /**
+     * Surface entries rejected by a SendMessageBatch request as an SqsException.
+     *
+     * A batch can return HTTP 200 while rejecting entries.
+     *
+     * @param  \Aws\ResultInterface  $result
+     * @param  array  $chunk
+     * @param  string  $queueUrl
+     * @return void
+     *
+     * @throws \Aws\Sqs\Exception\SqsException
+     */
+    protected function throwIfBatchEntriesFailed($result, array $chunk, $queueUrl)
+    {
+        if (empty($result['Failed'])) {
+            return;
+        }
+
+        $failure = $result['Failed'][0];
+
+        throw new SqsException(
+            sprintf(
+                'SQS SendMessageBatch rejected [%d] of [%d] messages. First failure [%s]: %s',
+                count($result['Failed']),
+                count($chunk),
+                $failure['Code'] ?? 'Unknown',
+                $failure['Message'] ?? '',
+            ),
+            new Command('SendMessageBatch', ['QueueUrl' => $queueUrl, 'Entries' => $chunk]),
+            [
+                'code' => $failure['Code'] ?? null,
+                'message' => $failure['Message'] ?? null,
+                'result' => $result,
+            ],
+        );
     }
 
     /**
