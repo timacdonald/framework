@@ -126,7 +126,7 @@ class FailedJobProvider implements FailedJobProviderInterface, CountableFailedJo
             return new Collection($value);
         }
 
-        return $this->loadedFailedJobs[$id] = $value
+        return $this->loadedFailedJobs[$id] = $value;
     }
 
     /**
