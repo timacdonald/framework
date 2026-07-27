@@ -10,6 +10,7 @@ use Illuminate\Queue\Failed\BulkForgetFailedJobProvider;
 use Illuminate\Queue\Failed\CountableFailedJobProvider;
 use Illuminate\Queue\Failed\FailedJobProviderInterface;
 use Illuminate\Queue\Failed\PrunableFailedJobProvider;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 use RuntimeException;
@@ -119,7 +120,13 @@ class FailedJobProvider implements FailedJobProviderInterface, CountableFailedJo
             ->throw()
             ->get($id);
 
-        return $this->loadedFailedJobs[$id] = json_decode($this->encrypter->decryptString($response->body()), flags: JSON_THROW_ON_ERROR);
+        $value = json_decode($this->encrypter->decryptString($response->body()), flags: JSON_THROW_ON_ERROR);
+
+        if (is_array($value)) {
+            return new Collection($value);
+        }
+
+        return $this->loadedFailedJobs[$id] = $value
     }
 
     /**
