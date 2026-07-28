@@ -120,13 +120,17 @@ class FailedJobProvider implements FailedJobProviderInterface, CountableFailedJo
             ->throw()
             ->get($id);
 
-        $value = json_decode($this->encrypter->decryptString($response->body()), flags: JSON_THROW_ON_ERROR);
+        $job = json_decode($this->encrypter->decryptString($response->body()), flags: JSON_THROW_ON_ERROR);
 
-        if (is_array($value)) {
-            return new Collection($value);
+        if (is_array($job)) {
+            return (new Collection($job))->mapWithKeys(function ($job) {
+                $this->loadedFailedJobs[$job->id] = $job;
+
+                return [$job->id => $job];
+            });
         }
 
-        return $this->loadedFailedJobs[$id] = $value;
+        return $this->loadedFailedJobs[$id] = $job;
     }
 
     /**
