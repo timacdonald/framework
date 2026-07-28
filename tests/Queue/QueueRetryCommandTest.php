@@ -13,6 +13,7 @@ use Illuminate\Queue\SqsQueue;
 use Illuminate\Support\Collection;
 use Mockery as m;
 use PHPUnit\Framework\TestCase;
+use RuntimeException;
 use stdClass;
 use Symfony\Component\Console\Input\ArrayInput;
 use Symfony\Component\Console\Output\BufferedOutput;
@@ -338,6 +339,83 @@ class QueueRetryCommandTest extends TestCase
         $failer->shouldReceive('forgetMany')->once()->with(['job-1', 'job-2']);
 
         $this->runRetryCommand(['id' => ['batch']], $failer, ['database' => $queue]);
+    }
+
+    public function testItResetsAttemptsCountWhenRetryingACollectionOfJobs()
+    {
+        $failer = m::mock(FailedJobProviderInterface::class);
+        $queue = m::mock(QueueContract::class);
+
+        $jobs = new Collection([
+            'job-1' => $this->failedJob(id: 'job-1', connection: 'database', queue: 'default', payload: ['attempts' => 5]),
+        ]);
+
+        $failer->shouldReceive('find')->once()->with('batch')->andReturn($jobs);
+        $queue->shouldReceive('pushRaw')->once()->with(m::on(function ($payload) {
+            return json_decode($payload, true)['attempts'] === 0;
+        }), 'default', []);
+        $failer->shouldReceive('forget')->once()->with('job-1');
+
+        $this->runRetryCommand(['id' => ['batch']], $failer, ['database' => $queue]);
+    }
+
+    public function testRefreshesTheRetryUntilTimestampWhenRetryingACollectionOfJobs()
+    {
+        $failer = m::mock(FailedJobProviderInterface::class);
+        $queue = m::mock(QueueContract::class);
+
+        $jobs = new Collection([
+            'job-1' => $this->failedJob(
+                id: 'job-1',
+                connection: 'database',
+                queue: 'default',
+                payload: ['retryUntil' => 0],
+                job: new QueueRetryCommandTestJobWithRetryUntil(retryUntil: 1234567890)
+            ),
+        ]);
+
+        $failer->shouldReceive('find')->once()->with('batch')->andReturn($jobs);
+        $queue->shouldReceive('pushRaw')->once()->with(m::on(function ($payload) {
+            return json_decode($payload, true)['retryUntil'] === 1234567890;
+        }), 'default', []);
+        $failer->shouldReceive('forget')->once()->with('job-1');
+
+        $this->runRetryCommand(['id' => ['batch']], $failer, ['database' => $queue]);
+    }
+
+    public function testRetryingAnEmptyCollectionOfJobsPushesNothingAndForgetsNothing()
+    {
+        $failer = m::mock(FailedJobProviderInterface::class, BulkForgetFailedJobProvider::class);
+
+        $failer->shouldReceive('find')->once()->with('batch')->andReturn(new Collection);
+        $failer->shouldReceive('forgetMany')->once()->with([]);
+        $failer->shouldNotReceive('forget');
+
+        $output = $this->runRetryCommand(['id' => ['batch']], $failer, []);
+
+        $this->assertStringContainsString('DONE', $output);
+    }
+
+    public function testJobsAreNotForgottenWhenRetryingACollectionOfJobsFails()
+    {
+        $failer = m::mock(FailedJobProviderInterface::class, BulkForgetFailedJobProvider::class);
+        $queue = m::mock(SqsQueue::class);
+
+        $jobs = new Collection([
+            'job-1' => $this->failedJob(id: 'job-1', connection: 'sqs', queue: 'default'),
+            'job-2' => $this->failedJob(id: 'job-2', connection: 'sqs', queue: 'default'),
+        ]);
+
+        $failer->shouldReceive('find')->once()->with('batch')->andReturn($jobs);
+        $queue->shouldReceive('getQueueableOptions')->twice()->andReturn([]);
+        $queue->shouldReceive('pushBulkRaw')->once()->andThrow(new RuntimeException('SQS is down'));
+        $failer->shouldNotReceive('forget');
+        $failer->shouldNotReceive('forgetMany');
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('SQS is down');
+
+        $this->runRetryCommand(['id' => ['batch']], $failer, ['sqs' => $queue]);
     }
 
     private function failedJob(

@@ -1590,6 +1590,62 @@ class QueueSqsQueueTest extends TestCase
         $this->assertSame([], $queue->pushBulkRaw([], $this->queueName));
     }
 
+    public function testPushBulkRawReturnsMessageIdsInPayloadOrderAcrossChunks()
+    {
+        $queue = $this->getMockBuilder(SqsQueue::class)
+            ->onlyMethods(['getQueue'])
+            ->setConstructorArgs([$this->sqs, $this->queueName, $this->account])
+            ->getMock();
+        $queue->setContainer(m::mock(Container::class));
+        $queue->expects($this->once())->method('getQueue')->willReturn($this->queueUrl);
+
+        // Each batch acknowledges its entries in reverse order to prove the
+        // returned IDs are re-keyed and sorted by original payload position...
+        $this->sqs->shouldReceive('sendMessageBatch')->twice()->andReturnUsing(function ($args) {
+            return new Result([
+                'Successful' => array_reverse(array_map(fn ($entry) => [
+                    'Id' => $entry['Id'],
+                    'MessageId' => 'mid-'.$entry['Id'],
+                ], $args['Entries'])),
+                'Failed' => [],
+            ]);
+        });
+
+        $ids = $queue->pushBulkRaw(array_map(fn ($i) => "payload-{$i}", range(0, 14)), $this->queueName);
+
+        $this->assertSame(array_map(fn ($i) => "mid-{$i}", range(0, 14)), $ids);
+    }
+
+    public function testPushBulkRawThrowsWhenABatchIsPartiallyRejected()
+    {
+        $queue = $this->getMockBuilder(SqsQueue::class)
+            ->onlyMethods(['getQueue'])
+            ->setConstructorArgs([$this->sqs, $this->queueName, $this->account])
+            ->getMock();
+        $queue->setContainer(m::mock(Container::class));
+        $queue->expects($this->once())->method('getQueue')->willReturn($this->queueUrl);
+
+        $this->sqs->shouldReceive('sendMessageBatch')->once()->andReturnUsing(function ($args) {
+            return new Result([
+                'Successful' => [['Id' => $args['Entries'][0]['Id'], 'MessageId' => 'mid-0']],
+                'Failed' => [
+                    ['Id' => $args['Entries'][1]['Id'], 'Code' => 'InternalError', 'Message' => 'oops', 'SenderFault' => false],
+                ],
+            ]);
+        });
+
+        try {
+            $queue->pushBulkRaw(['p1', 'p2'], $this->queueName);
+
+            $this->fail('SqsException was not thrown.');
+        } catch (SqsException $e) {
+            $this->assertSame(
+                'SQS SendMessageBatch rejected [1] of [2] messages. First failure [InternalError]: oops',
+                $e->getMessage()
+            );
+        }
+    }
+
     public function testPopPassesOverflowStorageOptionsToJob()
     {
         $overflowStorage = [

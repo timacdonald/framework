@@ -35,6 +35,7 @@ use Illuminate\Queue\Worker;
 use Illuminate\Queue\WorkerStopReason;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
@@ -1596,6 +1597,74 @@ class QueueTest extends TestCase
         $provider->forgetMany(['https://cloud.laravel.com/api/jobs/never-loaded?signature=abc']);
 
         $this->assertSame([], $eventsFake->emitted());
+    }
+
+    public function testFindReturnsACollectionOfJobsKeyedByIdWhenTheApiReturnsMultipleJobs()
+    {
+        $eventsFake = $this->fakeEvents();
+        $failer = $this->fakeFailer();
+        $provider = new FailedJobProvider($failer, $eventsFake, $this->app['encrypter']);
+
+        $jobs = [
+            ['id' => 'job-1', 'connection' => 'cloud', 'queue' => 'default', 'payload' => '{}'],
+            ['id' => 'job-2', 'connection' => 'cloud', 'queue' => 'emails', 'payload' => '{}'],
+        ];
+
+        Http::fake([
+            'https://cloud.laravel.com/*' => Http::response(Crypt::encryptString(json_encode($jobs))),
+        ]);
+
+        $result = $provider->find('https://cloud.laravel.com/api/jobs/batch?signature=abc');
+
+        $this->assertInstanceOf(Collection::class, $result);
+        $this->assertSame(['job-1', 'job-2'], $result->keys()->all());
+        $this->assertSame('default', $result['job-1']->queue);
+        $this->assertSame('emails', $result['job-2']->queue);
+    }
+
+    public function testForgetManyEmitsEventsForJobsLoadedViaABulkFind()
+    {
+        $this->travelTo('2000-01-02 03:04:05.060708');
+        $eventsFake = $this->fakeEvents();
+        $failer = $this->fakeFailer();
+        $provider = new FailedJobProvider($failer, $eventsFake, $this->app['encrypter']);
+
+        // The retry command forgets collection jobs using the collection's keys,
+        // which the bulk find() branch derives from each job's "id". For those
+        // keys to route back through the cloud branch of forgetMany() and hit
+        // the loaded-jobs cache, the API must return each job's signed URL as
+        // its "id"...
+        $urlOne = 'https://cloud.laravel.com/api/jobs/job-1?signature=abc';
+        $urlTwo = 'https://cloud.laravel.com/api/jobs/job-2?signature=abc';
+
+        $jobs = [
+            ['id' => $urlOne, 'connection' => 'cloud', 'queue' => 'default', 'payload' => '{}'],
+            ['id' => $urlTwo, 'connection' => 'cloud', 'queue' => 'emails', 'payload' => '{}'],
+        ];
+
+        Http::fake([
+            'https://cloud.laravel.com/api/jobs/batch*' => Http::response(Crypt::encryptString(json_encode($jobs))),
+        ]);
+
+        $found = $provider->find('https://cloud.laravel.com/api/jobs/batch?signature=abc');
+
+        $provider->forgetMany($found->keys()->all());
+
+        $this->assertCount(1, $eventsFake->writes);
+        $this->assertSame([
+            [
+                '_cloud_event' => 'failed_job',
+                'id' => $urlOne,
+                'queue' => 'default',
+                'retried_at' => '2000-01-02 03:04:05.060708',
+            ],
+            [
+                '_cloud_event' => 'failed_job',
+                'id' => $urlTwo,
+                'queue' => 'emails',
+                'retried_at' => '2000-01-02 03:04:05.060708',
+            ],
+        ], $eventsFake->writes[0]);
     }
 
     public function testItThrowsManagedQueueNotFoundExceptionWhenQueueDoesNotExist()

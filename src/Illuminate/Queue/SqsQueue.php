@@ -288,7 +288,7 @@ class SqsQueue extends Queue implements QueueContract, ClearableQueue
     /**
      * Push an array of raw payloads onto the queue using the SendMessageBatch API.
      *
-     * @param  array<int, string|array{payload: string, options?: array}>  $payloads
+     * @param  array<int, string|array{payload: string, options: array}>  $payloads
      * @param  string|null  $queue
      * @param  array  $options
      * @return array<int, string>
