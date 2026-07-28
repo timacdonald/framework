@@ -161,6 +161,8 @@ class FailedJobProvider implements FailedJobProviderInterface, CountableFailedJo
 
     /**
      * Forget the failed jobs with the given IDs.
+     *
+     * @param  list<string>  $ids
      */
     public function forgetMany(array $ids): void
     {
