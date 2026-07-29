@@ -9,6 +9,7 @@ use Illuminate\Queue\Events\JobRetryRequested;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Enumerable;
+use Illuminate\Support\Facades\Log;
 use RuntimeException;
 use Symfony\Component\Console\Attribute\AsCommand;
 
@@ -203,6 +204,8 @@ class RetryCommand extends Command
 
         if (is_object($instance) && ! $instance instanceof \__PHP_Incomplete_Class && method_exists($instance, 'retryUntil')) {
             $retryUntil = $instance->retryUntil();
+
+            Log::debug('Retry until '.$retryUntil->toDateTimeString());
 
             $payload['retryUntil'] = $retryUntil instanceof DateTimeInterface
                 ? $retryUntil->getTimestamp()
