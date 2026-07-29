@@ -10,6 +10,7 @@ use Illuminate\Contracts\Queue\Queue as QueueContract;
 use Illuminate\Queue\Jobs\SqsJob;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
 class SqsQueue extends Queue implements QueueContract, ClearableQueue
@@ -279,6 +280,11 @@ class SqsQueue extends Queue implements QueueContract, ClearableQueue
         if ($this->willOverflow($payload)) {
             $payload = $this->overflow($payload);
         }
+
+        Log::debug('queueing payload', [
+            'payload' => $payload,
+            'options' => $options,
+        ]);
 
         return $this->sqs->sendMessage([
             'QueueUrl' => $this->getQueue($queue), 'MessageBody' => $payload, ...$options,
