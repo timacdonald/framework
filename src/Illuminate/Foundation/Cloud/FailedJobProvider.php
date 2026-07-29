@@ -122,7 +122,7 @@ class FailedJobProvider implements FailedJobProviderInterface, CountableFailedJo
             // UNZIP automatically.
             ->get($id);
 
-        $jobs = json_decode($this->encrypter->decryptString($response->body()), flags: JSON_THROW_ON_ERROR);
+        $jobs = json_decode($this->encrypter->decryptString($response->body()), associative: false, flags: JSON_THROW_ON_ERROR);
 
         if (is_array($jobs)) {
             return new LazyCollection(function () use ($jobs) {
@@ -137,10 +137,12 @@ class FailedJobProvider implements FailedJobProviderInterface, CountableFailedJo
             });
         }
 
-        return $this->loadedFailedJobDetails[$id] = [
+        $this->loadedFailedJobDetails[$id] = [
             'id' => $jobs->id,
             'queue' => $jobs->queue,
         ];
+
+        return $jobs;
     }
 
     /**
