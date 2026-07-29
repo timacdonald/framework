@@ -132,7 +132,7 @@ class FailedJobProvider implements FailedJobProviderInterface, CountableFailedJo
                         'queue' => $job->queue,
                     ];
 
-                    yield $job;
+                    yield $job->id => $job;
                 }
             });
         }
