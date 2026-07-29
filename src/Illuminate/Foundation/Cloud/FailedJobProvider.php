@@ -12,6 +12,8 @@ use Illuminate\Queue\Failed\FailedJobProviderInterface;
 use Illuminate\Queue\Failed\PrunableFailedJobProvider;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\LazyCollection;
 use Illuminate\Support\Str;
 use RuntimeException;
 
@@ -27,9 +29,9 @@ class FailedJobProvider implements FailedJobProviderInterface, CountableFailedJo
     /**
      * The loaded failed jobs keyed by ID.
      *
-     * @var array<string, object>
+     * @var array<string, array{queue: string, id: string}>
      */
-    protected $loadedFailedJobs = [];
+    protected $loadedFailedJobDetails = [];
 
     /**
      * Create a new instance.
@@ -121,17 +123,25 @@ class FailedJobProvider implements FailedJobProviderInterface, CountableFailedJo
             // UNZIP automatically.
             ->get($id);
 
-        $job = json_decode($this->encrypter->decryptString($response->body()), flags: JSON_THROW_ON_ERROR);
+        $jobs = json_decode($this->encrypter->decryptString($response->body()), flags: JSON_THROW_ON_ERROR);
 
-        if (is_array($job)) {
-            return (new Collection($job))->mapWithKeys(function ($job) {
-                $this->loadedFailedJobs[$job->id] = $job;
+        if (is_array($jobs)) {
+            return (new LazyCollection(function () use ($jobs) {
+                while ($job = array_shift($jobs)) {
+                    $this->loadedFailedJobDetails[$job->id] = [
+                        'id' => $job->id,
+                        'queue' => $job->queue,
+                    ];
 
-                return [$job->id => $job];
+                    yield $job;
+                }
             });
         }
 
-        return $this->loadedFailedJobs[$id] = $job;
+        return $this->loadedFailedJobDetails[$id] = [
+            'id' => $jobs->id,
+            'queue' => $jobs->queue,
+        ];
     }
 
     /**
@@ -146,14 +156,16 @@ class FailedJobProvider implements FailedJobProviderInterface, CountableFailedJo
             return $this->failer->forget($id);
         }
 
-        if (is_null($job = $this->loadedFailedJobs[$id] ?? null)) {
+        if (is_null($details = $this->loadedFailedJobDetails[$id] ?? null)) {
             return false;
         }
 
+        unset($this->loadedFailedJobDetails[$id]);
+
         $this->events->emit([
             '_cloud_event' => 'failed_job',
-            'id' => $job->id,
-            'queue' => $job->queue,
+            'id' => $details['id'],
+            'queue' => $details['queue'],
             'retried_at' => CarbonImmutable::now('UTC')->toDateTimeString('microsecond'),
         ]);
 
@@ -186,7 +198,7 @@ class FailedJobProvider implements FailedJobProviderInterface, CountableFailedJo
         $events = [];
 
         foreach ($ids as $id) {
-            if (is_null($job = $this->loadedFailedJobs[$id] ?? null)) {
+            if (is_null($job = $this->loadedFailedJobDetails[$id] ?? null)) {
                 continue;
             }
 
