@@ -10,6 +10,7 @@ use Illuminate\Queue\Failed\BulkForgetFailedJobProvider;
 use Illuminate\Queue\Failed\CountableFailedJobProvider;
 use Illuminate\Queue\Failed\FailedJobProviderInterface;
 use Illuminate\Queue\Failed\PrunableFailedJobProvider;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\LazyCollection;
@@ -125,6 +126,15 @@ class FailedJobProvider implements FailedJobProviderInterface, CountableFailedJo
         $jobs = json_decode($this->encrypter->decryptString($response->body()), associative: false, flags: JSON_THROW_ON_ERROR);
 
         if (is_array($jobs)) {
+            return (new Collection($jobs))->mapWithKeys(function ($job) {
+                $this->loadedFailedJobDetails[$job->id] = [
+                    'id' => $job->id,
+                    'queue' => $job->queue,
+                ];
+
+                return [$job->id => $job];
+            });
+
             return new LazyCollection(function () use ($jobs, $id) {
                 while ($job = array_shift($jobs)) {
                     $key = $id.':'.$job->id;
