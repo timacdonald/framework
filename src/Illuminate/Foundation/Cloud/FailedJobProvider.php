@@ -5,13 +5,17 @@ namespace Illuminate\Foundation\Cloud;
 use Carbon\CarbonImmutable;
 use DateTimeInterface;
 use Illuminate\Contracts\Encryption\StringEncrypter;
-use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Http\Client\RequestException;
+use Illuminate\Http\Client\Response;
 use Illuminate\Queue\Failed\CountableFailedJobProvider;
 use Illuminate\Queue\Failed\FailedJobProviderInterface;
 use Illuminate\Queue\Failed\PrunableFailedJobProvider;
+use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\LazyCollection;
 use Illuminate\Support\Str;
 use RuntimeException;
+use Throwable;
 
 class FailedJobProvider implements FailedJobProviderInterface, CountableFailedJobProvider, PrunableFailedJobProvider
 {
@@ -112,13 +116,68 @@ class FailedJobProvider implements FailedJobProviderInterface, CountableFailedJo
             return $this->failer->find($id);
         }
 
-        $response = Http::connectTimeout(10)
-            ->timeout(10)
-            ->retry(3, 1000, fn ($exception) => $exception instanceof ConnectionException)
-            ->throw()
-            ->get($id);
+        return new LazyCollection(function () use ($id) {
+            $payload = $this->resolveFailedJobsPayload($id);
+            $id = null;
 
-        return $this->loadedFailedJobs[$id] = json_decode($this->encrypter->decryptString($response->body()), flags: JSON_THROW_ON_ERROR);
+            while ($job = array_shift($payload->data)) {
+                $key = $payload->links->self.':'.$job->id;
+
+                $this->loadedFailedJobs[$key] = $job;
+
+                yield $key => $job;
+
+                if ($payload->data === [] && $payload->links->next !== null) {
+                    $payload = $this->resolveFailedJobsPayload($payload->links->next);
+                }
+            }
+        });
+    }
+
+    /**
+     * Resolve the failed jobs payload for the given URL.
+     */
+    protected function resolveFailedJobsPayload(string $url): object
+    {
+        $response = $this->fetchFailedJobs($url);
+
+        $payload = json_decode(
+            json: $this->encrypter->decryptString($response->body()),
+            associative: false,
+            flags: JSON_THROW_ON_ERROR,
+        );
+
+        return match ($response->header('Cloud-Payload-Version')) {
+            '1' => $payload,
+            default => literal(
+                data: [$payload],
+                links: literal(
+                    self: $url,
+                    next: null,
+                ),
+            ),
+        };
+    }
+
+    /**
+     * Fetch the failed jobs from the given URL.
+     */
+    protected function fetchFailedJobs(string $url): Response
+    {
+        return Http::connectTimeout(10)
+            ->timeout(10)
+            ->retry(3, 1000, function (Throwable $e) {
+                if ($e instanceof RequestException && $e->response->status() === 403) {
+                    return false;
+                }
+
+                return true;
+            })
+            ->withHeaders([
+                'Cloud-Encryption-Cipher' => Config::get('app.cipher'),
+            ])
+            ->throw()
+            ->get($url);
     }
 
     /**
@@ -136,6 +195,8 @@ class FailedJobProvider implements FailedJobProviderInterface, CountableFailedJo
         if (is_null($job = $this->loadedFailedJobs[$id] ?? null)) {
             return false;
         }
+
+        unset($this->loadedFailedJobs[$id]);
 
         $this->events->emit([
             '_cloud_event' => 'failed_job',
