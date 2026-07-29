@@ -118,6 +118,7 @@ class FailedJobProvider implements FailedJobProviderInterface, CountableFailedJo
             ->timeout(10)
             ->retry(3, 1000, fn ($exception) => $exception instanceof ConnectionException)
             ->throw()
+            // UNZIP automatically.
             ->get($id);
 
         $job = json_decode($this->encrypter->decryptString($response->body()), flags: JSON_THROW_ON_ERROR);
