@@ -9,8 +9,6 @@ use Illuminate\Queue\Events\JobRetryRequested;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Enumerable;
-use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Number;
 use RuntimeException;
 use Symfony\Component\Console\Attribute\AsCommand;
 
@@ -67,31 +65,11 @@ class RetryCommand extends Command
             }
 
             foreach ($found as $id => $job) {
-                Log::debug('Memory check before job retry requested event', [
-                    'peak_memory' => Number::fileSize(memory_get_peak_usage(), 3),
-                    'memory' => Number::fileSize(memory_get_usage(), 3),
-                ]);
-
                 $this->laravel['events']->dispatch(new JobRetryRequested($job));
-
-                Log::debug('Memory check before retry job', [
-                    'peak_memory' => Number::fileSize(memory_get_peak_usage(), 3),
-                    'memory' => Number::fileSize(memory_get_usage(), 3),
-                ]);
 
                 $this->components->task($id, fn () => $this->retryJob($job));
 
-                Log::debug('Memory check before forget job', [
-                    'peak_memory' => Number::fileSize(memory_get_peak_usage(), 3),
-                    'memory' => Number::fileSize(memory_get_usage(), 3),
-                ]);
-
                 $this->laravel['queue.failer']->forget($id);
-
-                Log::debug('Memory check after forget job', [
-                    'peak_memory' => Number::fileSize(memory_get_peak_usage(), 3),
-                    'memory' => Number::fileSize(memory_get_usage(), 3),
-                ]);
             }
         }
 
