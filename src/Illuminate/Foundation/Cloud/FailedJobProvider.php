@@ -125,14 +125,16 @@ class FailedJobProvider implements FailedJobProviderInterface, CountableFailedJo
         $jobs = json_decode($this->encrypter->decryptString($response->body()), associative: false, flags: JSON_THROW_ON_ERROR);
 
         if (is_array($jobs)) {
-            return new LazyCollection(function () use ($jobs) {
+            return new LazyCollection(function () use ($jobs, $id) {
                 while ($job = array_shift($jobs)) {
-                    $this->loadedFailedJobDetails[$job->id] = [
+                    $key = $id.':'.$job->id;
+
+                    $this->loadedFailedJobDetails[$key] = [
                         'id' => $job->id,
                         'queue' => $job->queue,
                     ];
 
-                    yield $job->id => $job;
+                    yield $key => $job;
                 }
             });
         }
