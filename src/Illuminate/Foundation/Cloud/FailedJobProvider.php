@@ -156,8 +156,9 @@ class FailedJobProvider implements FailedJobProviderInterface, CountableFailedJo
             flags: JSON_THROW_ON_ERROR,
         );
 
-        Log::debug("raw payload {$url}", [
-            'payload' => $payload,
+        Log::debug("Response {$url}", [
+            'body' => $payload,
+            'Cloud-Payload-Version' => $response->header('Cloud-Payload-Version'),
         ]);
 
         return match ($response->header('Cloud-Payload-Version')) {
