@@ -118,10 +118,10 @@ class FailedJobProvider implements FailedJobProviderInterface, CountableFailedJo
         }
 
         return new LazyCollection(function () use ($id) {
+            Log::debug("Requesting: {$id}");
             $payload = $this->resolveFailedJobsPayload($id);
-            Log::debug("resolved payload {$id}", [
-                'payload' => $payload,
-            ]);
+            Log::debug("Payload: {$payload}");
+
             $id = null;
 
             while ($job = array_shift($payload->data)) {
@@ -133,12 +133,11 @@ class FailedJobProvider implements FailedJobProviderInterface, CountableFailedJo
 
                 if ($payload->data === [] && $payload->links->next !== null) {
                     $url = $payload->links->next;
+                    Log::debug("Requesting: {$url}");
 
                     $payload = $this->resolveFailedJobsPayload($payload->links->next);
 
-                    Log::debug("resolved payload {$url}", [
-                        'payload' => $payload,
-                    ]);
+                    Log::debug("Payload: {$payload}");
                 }
             }
         });
