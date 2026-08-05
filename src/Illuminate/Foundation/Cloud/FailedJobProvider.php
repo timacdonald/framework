@@ -120,7 +120,7 @@ class FailedJobProvider implements FailedJobProviderInterface, CountableFailedJo
         return new LazyCollection(function () use ($id) {
             Log::debug("Requesting: {$id}");
             $payload = $this->resolveFailedJobsPayload($id);
-            Log::debug("Payload: {$payload}");
+            Log::debug('Payload: '.var_export($payload, return: true));
 
             $id = null;
 
@@ -137,7 +137,7 @@ class FailedJobProvider implements FailedJobProviderInterface, CountableFailedJo
 
                     $payload = $this->resolveFailedJobsPayload($payload->links->next);
 
-                    Log::debug("Payload: {$payload}");
+                    Log::debug('Payload: '.var_export($payload, return: true));
                 }
             }
         });
