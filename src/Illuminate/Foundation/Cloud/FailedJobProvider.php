@@ -12,6 +12,7 @@ use Illuminate\Queue\Failed\FailedJobProviderInterface;
 use Illuminate\Queue\Failed\PrunableFailedJobProvider;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\LazyCollection;
 use Illuminate\Support\Str;
 use RuntimeException;
@@ -118,6 +119,9 @@ class FailedJobProvider implements FailedJobProviderInterface, CountableFailedJo
 
         return new LazyCollection(function () use ($id) {
             $payload = $this->resolveFailedJobsPayload($id);
+            Log::debug("resolved payload {$id}", [
+                'payload' => $payload,
+            ]);
             $id = null;
 
             while ($job = array_shift($payload->data)) {
@@ -128,7 +132,13 @@ class FailedJobProvider implements FailedJobProviderInterface, CountableFailedJo
                 yield $key => $job;
 
                 if ($payload->data === [] && $payload->links->next !== null) {
+                    $url = $payload->links->next;
+
                     $payload = $this->resolveFailedJobsPayload($payload->links->next);
+
+                    Log::debug("resolved payload {$url}", [
+                        'payload' => $payload,
+                    ]);
                 }
             }
         });
@@ -146,6 +156,10 @@ class FailedJobProvider implements FailedJobProviderInterface, CountableFailedJo
             associative: false,
             flags: JSON_THROW_ON_ERROR,
         );
+
+        Log::debug("raw payload {$url}", [
+            'payload' => $payload,
+        ]);
 
         return match ($response->header('Cloud-Payload-Version')) {
             '1' => $payload,
