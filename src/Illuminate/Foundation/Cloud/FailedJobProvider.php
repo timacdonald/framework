@@ -117,6 +117,8 @@ class FailedJobProvider implements FailedJobProviderInterface, CountableFailedJo
             return $this->failer->find($id);
         }
 
+        $id = rawurldecode($id);
+
         return new LazyCollection(function () use ($id) {
             Log::debug("Requesting: {$id}");
             $payload = $this->resolveFailedJobsPayload($id);
