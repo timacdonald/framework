@@ -117,16 +117,17 @@ class FailedJobProvider implements FailedJobProviderInterface, CountableFailedJo
             return $this->failer->find($id);
         }
 
+        Log::debug("Requesting: {$id}");
+        $payload = $this->resolveFailedJobsPayload($id);
+        Log::debug('Payload: '.var_export($payload, return: true));
+
         // $iterator = (function () use ($payload) {
         //     while ($job = array_shift($payload->data)) {
         //         yield $job;
         //     }
         // })();
 
-        return new LazyCollection(function () use ($id) {
-            $payload = $this->resolveFailedJobsPayload($id);
-            $id = null;
-
+        return new LazyCollection(function () {
             while ($job = array_shift($payload->data)) {
                 $key = $payload->links->self.':'.$job->id;
 
@@ -135,7 +136,12 @@ class FailedJobProvider implements FailedJobProviderInterface, CountableFailedJo
                 yield $key => $job;
 
                 if ($payload->data === [] && $payload->links->next !== null) {
+                    $url = $payload->links->next;
+                    Log::debug("Requesting: {$url}");
+
                     $payload = $this->resolveFailedJobsPayload($payload->links->next);
+
+                    Log::debug('Payload: '.var_export($payload, return: true));
                 }
             }
         });
@@ -153,6 +159,11 @@ class FailedJobProvider implements FailedJobProviderInterface, CountableFailedJo
             associative: false,
             flags: JSON_THROW_ON_ERROR,
         );
+
+        Log::debug("Response {$url}", [
+            'body' => $payload,
+            'Cloud-Payload-Version' => $response->header('Cloud-Payload-Version'),
+        ]);
 
         return match ($response->header('Cloud-Payload-Version')) {
             '1' => $payload,
