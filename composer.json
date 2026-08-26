@@ -227,7 +227,7 @@
     },
     "extra": {
         "branch-alias": {
-            "dev-cloud-exception-reporting": "13.x-dev"
+            "dev-master": "13.0.x-dev"
         }
     }
 }
