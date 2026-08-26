@@ -435,6 +435,90 @@ class HandleExceptionsTest extends TestCase
 
         $this->assertTrue(true);
     }
+
+    public function testFatalErrorFromPhpErrorReturnsOutOfMemoryErrorForMemoryExhaustion()
+    {
+        $instance = $this->handleExceptions();
+
+        $method = (new ReflectionClass($instance))->getMethod('fatalErrorFromPhpError');
+        $method->setAccessible(true);
+
+        $error = [
+            'type' => E_ERROR,
+            'message' => 'Allowed memory size of 134217728 bytes exhausted (tried to allocate 20480 bytes)',
+            'file' => '/home/user/laravel/app/Foo.php',
+            'line' => 10,
+        ];
+
+        $result = $method->invoke($instance, $error);
+
+        $this->assertInstanceOf(\Illuminate\Foundation\Exceptions\OutOfMemoryError::class, $result);
+        $this->assertInstanceOf(\Illuminate\Foundation\Exceptions\FatalError::class, $result);
+        $this->assertInstanceOf(\Illuminate\Foundation\Exceptions\FatalError::class, $result);
+    }
+
+    public function testFatalErrorFromPhpErrorReturnsOutOfMemoryErrorForOutOfMemoryMessage()
+    {
+        $instance = $this->handleExceptions();
+
+        $method = (new ReflectionClass($instance))->getMethod('fatalErrorFromPhpError');
+        $method->setAccessible(true);
+
+        $error = [
+            'type' => E_ERROR,
+            'message' => 'Out of memory (allocated 20971520) (tried to allocate 4096 bytes)',
+            'file' => '/home/user/laravel/app/Foo.php',
+            'line' => 10,
+        ];
+
+        $result = $method->invoke($instance, $error);
+
+        $this->assertInstanceOf(\Illuminate\Foundation\Exceptions\OutOfMemoryError::class, $result);
+        $this->assertInstanceOf(\Illuminate\Foundation\Exceptions\FatalError::class, $result);
+    }
+
+    public function testFatalErrorFromPhpErrorReturnsMaxExecutionTimeErrorForTimeouts()
+    {
+        $instance = $this->handleExceptions();
+
+        $method = (new ReflectionClass($instance))->getMethod('fatalErrorFromPhpError');
+        $method->setAccessible(true);
+
+        $error = [
+            'type' => E_ERROR,
+            'message' => 'Maximum execution time of 30 seconds exceeded',
+            'file' => '/home/user/laravel/app/Foo.php',
+            'line' => 10,
+        ];
+
+        $result = $method->invoke($instance, $error);
+
+        $this->assertInstanceOf(\Illuminate\Foundation\Exceptions\MaxExecutionTimeError::class, $result);
+        $this->assertInstanceOf(\Illuminate\Foundation\Exceptions\FatalError::class, $result);
+        $this->assertInstanceOf(\Symfony\Component\ErrorHandler\Error\FatalError::class, $result);
+    }
+
+    public function testFatalErrorFromPhpErrorReturnsPlainFatalErrorForOtherErrors()
+    {
+        $instance = $this->handleExceptions();
+
+        $method = (new ReflectionClass($instance))->getMethod('fatalErrorFromPhpError');
+        $method->setAccessible(true);
+
+        $error = [
+            'type' => E_ERROR,
+            'message' => 'Call to undefined function foo()',
+            'file' => '/home/user/laravel/app/Foo.php',
+            'line' => 10,
+        ];
+
+        $result = $method->invoke($instance, $error);
+
+        $this->assertInstanceOf(\Illuminate\Foundation\Exceptions\FatalError::class, $result);
+        $this->assertInstanceOf(\Symfony\Component\ErrorHandler\Error\FatalError::class, $result);
+        $this->assertNotInstanceOf(\Illuminate\Foundation\Exceptions\OutOfMemoryError::class, $result);
+        $this->assertNotInstanceOf(\Illuminate\Foundation\Exceptions\MaxExecutionTimeError::class, $result);
+    }
 }
 
 class CustomNullHandler extends NullHandler

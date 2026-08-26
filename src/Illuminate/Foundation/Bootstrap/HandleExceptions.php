@@ -6,14 +6,17 @@ use ErrorException;
 use Exception;
 use Illuminate\Contracts\Debug\ExceptionHandler;
 use Illuminate\Contracts\Foundation\Application;
+use Illuminate\Foundation\Exceptions\FatalError;
+use Illuminate\Foundation\Exceptions\MaxExecutionTimeError;
+use Illuminate\Foundation\Exceptions\OutOfMemoryError;
 use Illuminate\Log\LogManager;
 use Illuminate\Support\Env;
+use Illuminate\Support\Str;
 use Monolog\Handler\NullHandler;
 use PHPUnit\Framework\TestCase;
 use PHPUnit\Runner\ErrorHandler;
 use PHPUnit\Runner\Version;
 use Symfony\Component\Console\Output\ConsoleOutput;
-use Symfony\Component\ErrorHandler\Error\FatalError;
 use Throwable;
 
 class HandleExceptions
@@ -245,11 +248,40 @@ class HandleExceptions
      *
      * @param  array  $error
      * @param  int|null  $traceOffset
-     * @return \Symfony\Component\ErrorHandler\Error\FatalError
+     * @return \Illuminate\Foundation\Exceptions\FatalError
      */
     protected function fatalErrorFromPhpError(array $error, $traceOffset = null)
     {
-        return new FatalError($error['message'], 0, $error, $traceOffset);
+        if (Str::startsWith($error['message'], ['Allowed memory', 'Out of memory'])) {
+            return new OutOfMemoryError(
+                message: $error['message'],
+                code: 0,
+                error: $error,
+                traceOffset: $traceOffset,
+                // traceArgs: false, TODO (Symfony bug!)
+                traceArgs: true,
+                trace: $error['trace'] ?? null,
+            );
+        } elseif (str_starts_with($error['message'], 'Maximum execution time of')) {
+            return new MaxExecutionTimeError(
+                message: $error['message'],
+                code: 0,
+                error: $error,
+                traceOffset: $traceOffset,
+                // traceArgs: false, TODO (Symfony bug!)
+                traceArgs: true,
+                trace: $error['trace'] ?? null,
+            );
+        } else {
+            return new FatalError(
+                $error['message'],
+                0,
+                $error,
+                $traceOffset,
+                traceArgs: true,
+                trace: $error['trace'] ?? null,
+            );
+        }
     }
 
     /**

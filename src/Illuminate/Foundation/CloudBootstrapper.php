@@ -2,14 +2,20 @@
 
 namespace Illuminate\Foundation;
 
+use Illuminate\Contracts\Debug\ExceptionHandler as ExceptionHandlerContract;
 use Illuminate\Database\Migrations\Migrator;
 use Illuminate\Foundation\Bootstrap\BootProviders;
 use Illuminate\Foundation\Bootstrap\HandleExceptions;
 use Illuminate\Foundation\Bootstrap\LoadConfiguration;
 use Illuminate\Foundation\Cloud\Events;
+use Illuminate\Foundation\Cloud\ExceptionReporter;
 use Illuminate\Foundation\Cloud\FailedJobProvider;
 use Illuminate\Foundation\Cloud\QueueConnector;
+use Illuminate\Foundation\Exceptions\Handler as ExceptionHandler;
+use Illuminate\Foundation\Exceptions\Renderer\Mappers\BladeMapper;
 use Illuminate\Queue\Connectors\SqsConnector;
+use Illuminate\Queue\Events\JobProcessing;
+use Illuminate\Queue\Events\Looping;
 use Monolog\Handler\SocketHandler;
 use PDO;
 
@@ -43,6 +49,8 @@ class CloudBootstrapper
             },
             HandleExceptions::class => function () use ($app) {
                 static::configureCloudLogging($app);
+                static::registerEvents($app);
+                static::registerExceptionReporting($app);
             },
             default => fn () => true,
         })();
@@ -184,6 +192,14 @@ class CloudBootstrapper
     }
 
     /**
+     * Boot the events system for Laravel Cloud.
+     */
+    public static function registerEvents(Application $app): void
+    {
+        $app->singleton(Events::class, fn () => new Events(CloudBootstrapper::socket()));
+    }
+
+    /**
      * Boot managed queues if applicable.
      */
     public static function bootManagedQueues(Application $app): void
@@ -192,7 +208,6 @@ class CloudBootstrapper
             return;
         }
 
-        $app->singleton(Events::class, fn () => new Events(CloudBootstrapper::socket()));
         $app->bind(QueueConnector::class, fn ($app) => new QueueConnector(new SqsConnector, $app));
 
         $app['queue']->addConnector('cloud', $app->factory(QueueConnector::class));
@@ -234,6 +249,41 @@ class CloudBootstrapper
         if (! $app['config']->has('logging.channels.cloud')) {
             $app['config']->set('logging.channels.cloud', $channel);
         }
+    }
+
+    public static function registerExceptionReporting(Application $app): void
+    {
+        if (! isset($_SERVER['LARAVEL_CLOUD_EXCEPTIONS'])) {
+            return;
+        }
+
+        $handler = $app[ExceptionHandlerContract::class];
+
+        if (! ($handler instanceof ExceptionHandler)) {
+            return;
+        }
+
+        $config = [
+            'stop' => true,
+            'capture_request_payload' => false,
+            'redact_request_payload_fields' => ['_token', 'password', 'password_confirmation', 'current_password'],
+            ...json_decode($_SERVER['LARAVEL_CLOUD_EXCEPTIONS'], associative: true, flags: JSON_THROW_ON_ERROR),
+        ];
+
+        $handler->reportable($exceptionReporter = new ExceptionReporter(
+            $app[Events::class],
+            $app[BladeMapper::class],
+            $app->basePath().DIRECTORY_SEPARATOR,
+            $config,
+        ));
+
+        $app['events']->listen(function (JobProcessing $event) use ($exceptionReporter) {
+            if ($event->connectionName !== 'sync') {
+                $exceptionReporter->prepareForJob($event->job);
+            }
+        });
+
+        $app['events']->listen(fn (Looping $event) => $exceptionReporter->flushJobContext());
     }
 
     /**

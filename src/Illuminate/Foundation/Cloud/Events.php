@@ -14,6 +14,8 @@ class Events
      */
     protected $socket = null;
 
+    public static $socketFactory = null;
+
     /**
      * Create a new instance.
      */
@@ -27,9 +29,13 @@ class Events
      *
      * @param  array<string, mixed>  $payload
      */
-    public function emit(array $payload): void
+    public function emit(array $payload): bool
     {
-        $this->emitMany([$payload]);
+        if ($payload === []) {
+            return true;
+        }
+
+        return $this->emitMany([$payload]);
     }
 
     /**
@@ -37,18 +43,20 @@ class Events
      *
      * @param  list<array<string, mixed>>  $payloads
      */
-    public function emitMany(array $payloads): void
+    public function emitMany(array $payloads): bool
     {
         if ($payloads === []) {
-            return;
+            return true;
         }
 
         try {
             $this->ensureConnected();
 
             $this->write($this->format($payloads));
+
+            return true;
         } catch (Throwable) {
-            //
+            return false;
         }
     }
 
@@ -127,7 +135,9 @@ class Events
      */
     protected function connect(): void
     {
-        $socket = stream_socket_client(
+        $factory = static::$socketFactory ?? stream_socket_client(...);
+
+        $socket = $factory(
             address: $this->address,
             error_code: $errorCode,
             error_message: $errorMessage,
