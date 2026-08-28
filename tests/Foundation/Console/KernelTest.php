@@ -2,11 +2,14 @@
 
 namespace Illuminate\Tests\Foundation\Console;
 
+use Illuminate\Console\Command;
 use Illuminate\Events\Dispatcher;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Console\Kernel;
 use Illuminate\Foundation\Events\Terminating;
 use PHPUnit\Framework\TestCase;
+use ReflectionClass;
+use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Input\StringInput;
 
 class KernelTest extends TestCase
@@ -33,26 +36,26 @@ class KernelTest extends TestCase
         ], $called);
     }
 
-    public function testFindCommandReturnsNullWhenTheCommandDoesNotExist()
+    public function testCommandNamedReturnsNullWhenTheCommandDoesNotExist()
     {
         $kernel = $this->makeKernel();
 
-        $command = $kernel->findCommand('not-a-real-command');
+        $command = $kernel->commandNamed('not-a-real-command');
 
         $this->assertNull($command);
     }
 
-    public function testFindCommandRetrievesTheCommand()
+    public function testCommandNamedRetrievesTheCommand()
     {
         $kernel = $this->makeKernel();
         $kernel->registerCommand(new KernelTestCommand);
 
-        $command = $kernel->findCommand('kernel-test-command');
+        $command = $kernel->commandNamed('kernel-test-command');
 
         $this->assertInstanceOf(KernelTestCommand::class, $command);
     }
 
-    public function testFindCommandDoesNotResolveOtherLazilyRegisteredCommands()
+    public function testCommandNamedDoesNotResolveOtherLazilyRegisteredCommands()
     {
         KernelTestLazyCommand::$constructionAttempts = 0;
         $kernel = $this->makeKernel();
@@ -62,17 +65,17 @@ class KernelTest extends TestCase
 
         $kernel->registerCommand(new KernelTestCommand);
 
-        $command = $kernel->findCommand('kernel-test-command');
+        $command = $kernel->commandNamed('kernel-test-command');
 
         $this->assertInstanceOf(KernelTestCommand::class, $command);
         $this->assertSame(0, KernelTestLazyCommand::$constructionAttempts);
 
-        $command = $kernel->findCommand('kernel-test-lazy-command');
+        $command = $kernel->commandNamed('kernel-test-lazy-command');
         $this->assertSame(1, KernelTestLazyCommand::$constructionAttempts);
         $this->assertInstanceOf(KernelTestLazyCommand::class, $command);
     }
 
-    public function testFindCommandReturnsTheSameInstanceOnSubsequentCalls()
+    public function testCommandNamedReturnsTheSameInstanceOnSubsequentCalls()
     {
         KernelTestLazyCommand::$constructionAttempts = 0;
         $kernel = $this->makeKernel();
@@ -80,8 +83,8 @@ class KernelTest extends TestCase
         $artisan->resolveCommands([KernelTestLazyCommand::class]);
         $artisan->setContainerCommandLoader();
 
-        $first = $kernel->findCommand('kernel-test-lazy-command');
-        $second = $kernel->findCommand('kernel-test-lazy-command');
+        $first = $kernel->commandNamed('kernel-test-lazy-command');
+        $second = $kernel->commandNamed('kernel-test-lazy-command');
 
         $this->assertSame($first, $second);
         $this->assertSame(1, KernelTestLazyCommand::$constructionAttempts);
