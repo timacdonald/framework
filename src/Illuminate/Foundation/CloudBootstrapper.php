@@ -11,13 +11,13 @@ use Illuminate\Foundation\Cloud\Events;
 use Illuminate\Foundation\Cloud\ExceptionReporter;
 use Illuminate\Foundation\Cloud\FailedJobProvider;
 use Illuminate\Foundation\Cloud\QueueConnector;
-use Illuminate\Foundation\Exceptions\Handler as ExceptionHandler;
 use Illuminate\Foundation\Exceptions\Renderer\Mappers\BladeMapper;
 use Illuminate\Queue\Connectors\SqsConnector;
 use Illuminate\Queue\Events\JobProcessing;
 use Illuminate\Queue\Events\Looping;
 use Monolog\Handler\SocketHandler;
 use PDO;
+use Throwable;
 
 class CloudBootstrapper
 {
@@ -257,12 +257,6 @@ class CloudBootstrapper
             return;
         }
 
-        $handler = $app[ExceptionHandlerContract::class];
-
-        if (! ($handler instanceof ExceptionHandler)) {
-            return;
-        }
-
         $config = [
             'stop' => true,
             'capture_request_payload' => false,
@@ -270,12 +264,16 @@ class CloudBootstrapper
             ...json_decode($_SERVER['LARAVEL_CLOUD_EXCEPTIONS'], associative: true, flags: JSON_THROW_ON_ERROR),
         ];
 
-        $handler->reportable($exceptionReporter = new ExceptionReporter(
-            $app[Events::class],
-            proxy(fn (): BladeMapper => $app[BladeMapper::class]),
-            $app->basePath().DIRECTORY_SEPARATOR,
-            $config,
-        ));
+        try {
+            $app[ExceptionHandlerContract::class]->reportable($exceptionReporter = new ExceptionReporter(
+                $app[Events::class],
+                proxy(fn (): BladeMapper => $app[BladeMapper::class]),
+                $app->basePath().DIRECTORY_SEPARATOR,
+                $config,
+            ));
+        } catch (Throwable) {
+            return;
+        }
 
         $app['events']->listen(function (JobProcessing $event) use ($exceptionReporter) {
             if ($event->connectionName !== 'sync') {
