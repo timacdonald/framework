@@ -110,6 +110,7 @@ class QueueTest extends TestCase
         $_SERVER['argv'] = ['artisan', 'queue:work'];
 
         try {
+            Cloud::registerEvents($this->app);
             Cloud::bootManagedQueues($this->app);
             $this->assertTrue(Worker::$restartable);
 
@@ -126,6 +127,7 @@ class QueueTest extends TestCase
         $_SERVER['argv'] = ['artisan', 'queue:work'];
 
         try {
+            Cloud::registerEvents($this->app);
             Cloud::bootManagedQueues($this->app);
             $this->assertTrue(Worker::$pausable);
 
@@ -170,6 +172,7 @@ class QueueTest extends TestCase
     public function testItBindsQueueConnectorAndNewsUpSqsConnector()
     {
         $this->app->bind(SqsConnector::class, fn () => throw new RuntimeException('Should not be resolved'));
+        Cloud::registerEvents($this->app);
         Cloud::bootManagedQueues($this->app);
 
         $this->app[QueueConnector::class];
@@ -177,6 +180,7 @@ class QueueTest extends TestCase
 
     public function testItBindsCloudQueue()
     {
+        Cloud::registerEvents($this->app);
         Cloud::bootManagedQueues($this->app);
 
         $this->assertInstanceOf(Queue::class, $this->app['queue']->connection('cloud'));
@@ -184,6 +188,7 @@ class QueueTest extends TestCase
 
     public function testItBindsCloudEventsAsSingleton()
     {
+        Cloud::registerEvents($this->app);
         Cloud::bootManagedQueues($this->app);
 
         $this->assertFalse($this->app->resolved(Events::class));
@@ -192,6 +197,7 @@ class QueueTest extends TestCase
 
     public function testItBindsTheQueueFailer()
     {
+        Cloud::registerEvents($this->app);
         Cloud::bootManagedQueues($this->app);
 
         $this->assertInstanceOf(FailedJobProvider::class, $this->app['queue.failer']);
@@ -201,6 +207,7 @@ class QueueTest extends TestCase
     {
         $this->app['config']->set('queue.connections.cloud', null);
 
+        Cloud::registerEvents($this->app);
         Cloud::bootManagedQueues($this->app);
 
         $this->expectException(InvalidArgumentException::class);
@@ -215,7 +222,6 @@ class QueueTest extends TestCase
 
         Cloud::bootManagedQueues($this->app);
 
-        $this->assertFalse($this->app->bound(Events::class));
         $this->assertSame($originalFailer, $this->app['queue.failer']);
     }
 

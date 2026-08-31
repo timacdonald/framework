@@ -42,6 +42,7 @@ class Cloud
             },
             HandleExceptions::class => function () use ($app) {
                 static::configureCloudLogging($app);
+                static::registerEvents($app);
             },
             default => fn () => true,
         })();
@@ -146,6 +147,14 @@ class Cloud
     }
 
     /**
+     * Register the events system for Laravel Cloud.
+     */
+    public static function registerEvents(Application $app): void
+    {
+        $app->singleton(Events::class, fn () => new Events(Cloud::socket()));
+    }
+
+    /**
      * Boot managed queues if applicable.
      */
     public static function bootManagedQueues(Application $app): void
@@ -154,7 +163,6 @@ class Cloud
             return;
         }
 
-        $app->singleton(Events::class, fn () => new Events(Cloud::socket()));
         $app->bind(QueueConnector::class, fn ($app) => new QueueConnector(new SqsConnector, $app));
 
         $app['queue']->addConnector('cloud', $app->factory(QueueConnector::class));
