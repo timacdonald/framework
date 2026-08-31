@@ -232,7 +232,7 @@ class ExceptionReporter
         }
 
         try {
-            $command = Artisan::commandNamed($name);
+            $command = Artisan::findCommand($name);
 
             return $command !== null
                 ? $command::class
