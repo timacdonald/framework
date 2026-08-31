@@ -151,7 +151,11 @@ class ExceptionReporter
      */
     protected function exceptionContext(Throwable $e): object
     {
-        return (object) Arr::except(Exceptions::contextForException($e), 'exception');
+        try {
+            return (object) Arr::except(Exceptions::contextForException($e), 'exception');
+        } catch (Throwable) {
+            return (object) [];
+        }
     }
 
     /**
@@ -250,6 +254,7 @@ class ExceptionReporter
             'execution_type' => 'request',
             'execution_context' => [
                 'timestamp' => $this->laravelStartedAtTimestamp(),
+                // TODO redact headers
                 'headers' => Request::header(),
                 'method' => Request::method(),
                 'url' => Request::fullUrl(),
@@ -359,11 +364,17 @@ class ExceptionReporter
     /**
      * Retrieve the current user ID.
      */
-    protected function userId(): string
+    protected function userId(): ?string
     {
         // TODO ensure we don't hit recursion.
         // TODO jobs
-        return (string) Auth::user()?->getAuthIdentifier();
+        try {
+            $identifier = Auth::user()?->getAuthIdentifier();
+
+            return $identifier === null ? null : (string) $identifier;
+        } catch (Throwable) {
+            return null;
+        }
     }
 
     /**

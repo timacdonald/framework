@@ -5,9 +5,10 @@ namespace Illuminate\Tests\Foundation\Cloud;
 use Closure;
 use Exception;
 use Illuminate\Auth\GenericUser;
+use Illuminate\Contracts\Debug\ExceptionHandler;
 use Illuminate\Contracts\Queue\ShouldQueue;
-use Illuminate\Foundation\Cloud;
 use Illuminate\Foundation\Cloud\Events;
+use Illuminate\Foundation\CloudBootstrapper as Cloud;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Illuminate\Queue\Events\JobPopping;
@@ -144,7 +145,7 @@ class ExceptionReportingTest extends TestCase
                     'payload' => null,
                     'files' => null,
                 ],
-                'user_id' => '',
+                'user_id' => null,
                 'handled' => true,
                 'class' => 'RuntimeException',
                 'code' => '54',
@@ -565,6 +566,36 @@ class ExceptionReportingTest extends TestCase
         ]);
     }
 
+    public function testItCapturesEmptyExceptionContextWhenTheHandlerDoesNotSupportContextForException(): void
+    {
+        $this->app->instance(ExceptionHandler::class, new ExceptionHandlerWithoutContextForException);
+
+        $this->setupExceptionReporting();
+        $streams = $this->fakeEventsStreams();
+
+        report(new RuntimeException('Whoops!'));
+
+        $this->assertCount(1, $streams);
+        $streams[0]->assertWrittenJsonContains([
+            'exception_context' => [],
+        ]);
+    }
+
+    public function testItCapturesEmptyExceptionContextWhenContextForExceptionThrows(): void
+    {
+        $this->app->instance(ExceptionHandler::class, new ExceptionHandlerThatThrowsFromContextForException);
+
+        $this->setupExceptionReporting();
+        $streams = $this->fakeEventsStreams();
+
+        report(new RuntimeException('Whoops!'));
+
+        $this->assertCount(1, $streams);
+        $streams[0]->assertWrittenJsonContains([
+            'exception_context' => [],
+        ]);
+    }
+
     public function testItCapturesLaravelContext(): void
     {
         $this->setupExceptionReporting();
@@ -884,6 +915,21 @@ class ExceptionReportingTest extends TestCase
         $this->assertCount(1, $streams);
         $streams[0]->assertWrittenJsonContains([
             'user_id' => 'abc123',
+        ]);
+    }
+
+    public function testItFallsBackToNullWhenTheUserCannotBeResolved(): void
+    {
+        $this->setupExceptionReporting();
+        $streams = $this->fakeEventsStreams();
+
+        Auth::setUser(new UserThatThrowsWhenItsAuthIdentifierIsRetrieved);
+
+        report(new RuntimeException('Whoops!'));
+
+        $this->assertCount(1, $streams);
+        $streams[0]->assertWrittenJsonContains([
+            'user_id' => null,
         ]);
     }
 
@@ -1464,7 +1510,7 @@ class ExceptionReportingTest extends TestCase
                 'payload' => null,
                 'files' => null,
             ],
-            'user_id' => '',
+            'user_id' => null,
             'handled' => false,
             'class' => "Symfony\Component\ErrorHandler\Error\FatalError",
             'code' => '0',
@@ -1633,27 +1679,6 @@ class ExceptionReportingTest extends TestCase
         });
     }
 
-    public function testItGracefullyHandlesExceptionsWhileReporting(): void
-    {
-        $this->setupExceptionReporting();
-        $streams = $this->fakeEventsStreams();
-
-        $first = true;
-        Exceptions::buildContextUsing(function () use (&$first) {
-            if ($first) {
-                $first = false;
-
-                throw new RuntimeException('Context error!');
-            }
-
-            return [];
-        });
-
-        report(new RuntimeException('Whoops!'));
-
-        $this->assertCount(0, $streams);
-    }
-
     #[DataProvider('stopDataProvider')]
     public function testItCanConfigureStoppingExceptionReporting(bool $stopConfig, bool $expectToHaveCalled): void
     {
@@ -1686,31 +1711,6 @@ class ExceptionReportingTest extends TestCase
         Events::$socketFactory = function () {
             return false;
         };
-        $reportableCalled = false;
-        Exceptions::reportable(function (Throwable $e) use (&$reportableCalled) {
-            $reportableCalled = true;
-        });
-
-        report(new RuntimeException('Whoops!'));
-
-        $this->assertCount(0, $streams);
-        $this->assertTrue($reportableCalled);
-    }
-
-    public function testItDoesBubbleOnHandlingFailureWhenConfiguredNotToBubble(): void
-    {
-        $this->setupExceptionReporting(['stop' => true]);
-        $streams = $this->fakeEventsStreams();
-        $first = true;
-        Exceptions::buildContextUsing(function () use (&$first) {
-            if ($first) {
-                $first = false;
-
-                throw new RuntimeException('Context error!');
-            }
-
-            return [];
-        });
         $reportableCalled = false;
         Exceptions::reportable(function (Throwable $e) use (&$reportableCalled) {
             $reportableCalled = true;
@@ -1880,6 +1880,117 @@ class FakeStream
     public static function flush(): void
     {
         self::$instances = null;
+    }
+}
+
+class ExceptionHandlerWithoutContextForException implements ExceptionHandler
+{
+    protected array $reportUsingCallbacks = [];
+
+    public function reportable(callable $reportUsing): static
+    {
+        $this->reportUsingCallbacks[] = $reportUsing;
+
+        return $this;
+    }
+
+    public function report(Throwable $e)
+    {
+        foreach ($this->reportUsingCallbacks as $reportUsing) {
+            $reportUsing($e);
+        }
+    }
+
+    public function shouldReport(Throwable $e)
+    {
+        return true;
+    }
+
+    public function render($request, Throwable $e)
+    {
+        //
+    }
+
+    public function renderForConsole($output, Throwable $e)
+    {
+        //
+    }
+}
+
+class ExceptionHandlerThatThrowsFromContextForException implements ExceptionHandler
+{
+    protected array $reportUsingCallbacks = [];
+
+    public function reportable(callable $reportUsing): static
+    {
+        $this->reportUsingCallbacks[] = $reportUsing;
+
+        return $this;
+    }
+
+    public function report(Throwable $e)
+    {
+        foreach ($this->reportUsingCallbacks as $reportUsing) {
+            $reportUsing($e);
+        }
+    }
+
+    public function shouldReport(Throwable $e)
+    {
+        return true;
+    }
+
+    public function render($request, Throwable $e)
+    {
+        //
+    }
+
+    public function renderForConsole($output, Throwable $e)
+    {
+        //
+    }
+
+    public function contextForException(Throwable $e)
+    {
+        throw new RuntimeException('Context error!');
+    }
+}
+
+class UserThatThrowsWhenItsAuthIdentifierIsRetrieved implements \Illuminate\Contracts\Auth\Authenticatable
+{
+    public function getAuthIdentifierName()
+    {
+        return 'id';
+    }
+
+    public function getAuthIdentifier()
+    {
+        throw new RuntimeException('Boom while retrieving the auth identifier!');
+    }
+
+    public function getAuthPasswordName()
+    {
+        return 'password';
+    }
+
+    public function getAuthPassword()
+    {
+        return '';
+    }
+
+    public function getRememberToken()
+    {
+        return null;
+    }
+
+    public function setRememberToken($value)
+    {
+        //
+    }
+
+    public function getRememberTokenName()
+    {
+        return 'remember_token';
     }
 }
 
