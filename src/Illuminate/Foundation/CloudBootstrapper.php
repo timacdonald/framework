@@ -253,35 +253,35 @@ class CloudBootstrapper
 
     public static function registerExceptionReporting(Application $app): void
     {
-        if (! isset($_SERVER['LARAVEL_CLOUD_EXCEPTIONS'])) {
-            return;
-        }
-
-        $config = [
-            'stop' => true,
-            'capture_request_payload' => false,
-            'redact_request_payload_fields' => ['_token', 'password', 'password_confirmation', 'current_password'],
-            ...json_decode($_SERVER['LARAVEL_CLOUD_EXCEPTIONS'], associative: true, flags: JSON_THROW_ON_ERROR),
-        ];
-
         try {
+            if (! isset($_SERVER['LARAVEL_CLOUD_EXCEPTIONS'])) {
+                return;
+            }
+
+            $config = [
+                'stop' => true,
+                'capture_request_payload' => false,
+                'redact_request_payload_fields' => ['_token', 'password', 'password_confirmation', 'current_password'],
+                ...json_decode($_SERVER['LARAVEL_CLOUD_EXCEPTIONS'], associative: true, flags: JSON_THROW_ON_ERROR),
+            ];
+
             $app[ExceptionHandlerContract::class]->reportable($exceptionReporter = new ExceptionReporter(
                 $app[Events::class],
                 proxy(fn (): BladeMapper => $app[BladeMapper::class]),
                 $app->basePath().DIRECTORY_SEPARATOR,
                 $config,
             ));
+
+            $app['events']->listen(function (JobProcessing $event) use ($exceptionReporter) {
+                if ($event->connectionName !== 'sync') {
+                    $exceptionReporter->prepareForJob($event->job);
+                }
+            });
+
+            $app['events']->listen(fn (Looping $event) => $exceptionReporter->flushJobContext());
         } catch (Throwable) {
             return;
         }
-
-        $app['events']->listen(function (JobProcessing $event) use ($exceptionReporter) {
-            if ($event->connectionName !== 'sync') {
-                $exceptionReporter->prepareForJob($event->job);
-            }
-        });
-
-        $app['events']->listen(fn (Looping $event) => $exceptionReporter->flushJobContext());
     }
 
     /**
