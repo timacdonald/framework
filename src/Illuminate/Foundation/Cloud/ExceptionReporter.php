@@ -367,17 +367,6 @@ class ExceptionReporter
     }
 
     /**
-     * Retrieve the execution trace ID.
-     */
-    protected function traceId(): string
-    {
-        // TODO jobs, scheduled tasks?
-        return match (true) {
-            default => $this->requestTraceId(),
-        };
-    }
-
-    /**
      * Retrieve the console execution trace ID.
      */
     protected function consoleTraceId(): string
