@@ -1743,6 +1743,59 @@ class ExceptionReportingTest extends TestCase
         ], write: 1);
     }
 
+    public function testItCapturesExceptionsOnUnknownRoutes(): void
+    {
+        $this->freezeTime();
+        $_SERVER['REQUEST_TIME_FLOAT'] = (float) now()->subMinute()->format('U.u');
+        $this->setupExceptionReporting();
+        $streams = $this->fakeEventsStreams();
+
+        $this->app->make(\Illuminate\Contracts\Http\Kernel::class)->pushMiddleware(function ($request, $next) {
+            $this->setRunningInConsole(false);
+            throw new RuntimeException('Whoops!', 54);
+        });
+        $this->get('/test', ['Cloud-Request-ID' => '465ebb4e-2f86-434f-8e1b-cc364f317cef'])->assertServerError();
+
+        $this->assertCount(1, $streams);
+        $streams[0]->assertWrittenJson(function (array $payload) {
+            unset($payload['trace']); // we will test this in isolation
+
+            $this->assertSame([
+                '_cloud_event' => 'exception',
+                'timestamp' => now()->format('Y-m-d H:i:s.u'),
+                'exception_context' => [],
+                'laravel_context' => [],
+                'trace_id' => '465ebb4e-2f86-434f-8e1b-cc364f317cef',
+                'execution_type' => 'request',
+                'execution_context' => [
+                    'timestamp' => now()->subMinute()->format('Y-m-d H:i:s.u'),
+                    'headers' => [
+                        'host' => ['localhost'],
+                        'user-agent' => ['Symfony'],
+                        'accept' => ['text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'],
+                        'accept-language' => ['en-us,en;q=0.5'],
+                        'accept-charset' => ['ISO-8859-1,utf-8;q=0.7,*;q=0.7'],
+                        'cloud-request-id' => ['465ebb4e-2f86-434f-8e1b-cc364f317cef'],
+                    ],
+                    'method' => 'GET',
+                    'url' => 'http://localhost/test',
+                    'ip' => '127.0.0.1',
+                    'route' => null,
+                    'payload' => null,
+                    'files' => null,
+                ],
+                'user_id' => null,
+                'handled' => false,
+                'class' => 'RuntimeException',
+                'code' => '54',
+                'message' => 'Whoops!',
+                'previous' => [],
+            ], $payload);
+
+            return true;
+        });
+    }
+
     protected function fakeEventsStreams()
     {
         Events::$socketFactory = function (
