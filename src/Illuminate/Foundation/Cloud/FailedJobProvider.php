@@ -127,7 +127,7 @@ class FailedJobProvider implements FailedJobProviderInterface, CountableFailedJo
         //     }
         // })();
 
-        return new LazyCollection(function () {
+        return new LazyCollection(function () use ($payload) {
             while ($job = array_shift($payload->data)) {
                 $key = $payload->links->self.':'.$job->id;
 
