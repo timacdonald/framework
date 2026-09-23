@@ -54,6 +54,11 @@ class ExceptionReporter
     protected ?string $currentlyProcessingJobAttemptId = null;
 
     /**
+     * The trace ID for the current job attempt.
+     */
+    protected ?string $jobTraceId = null;
+
+    /**
      * Proactively captured execution context.
      *
      * @var array<string, mixed>
@@ -232,7 +237,7 @@ class ExceptionReporter
     protected function jobExecutionDetails(Throwable $e): array
     {
         return [
-            'trace_id' => 'TODO',
+            'trace_id' => $this->jobTraceId(),
             'execution_type' => 'job',
             'execution_context' => [
                 ...$this->executionContext,
@@ -246,11 +251,19 @@ class ExceptionReporter
     }
 
     /**
+     * Retrieve the job execution trace ID.
+     */
+    protected function jobTraceId(): string
+    {
+        return $this->jobTraceId ??= (string) Uuid::uuid7();
+    }
+
+    /**
      * The currently processing job attempt ID.
      */
     protected function currentlyProcessingJobAttemptId(): string
     {
-        return $this->currentlyProcessingJobAttemptId ??= (string) Uuid::uuid4();
+        return $this->currentlyProcessingJobAttemptId ??= (string) Uuid::uuid7();
     }
 
     /**
@@ -283,7 +296,7 @@ class ExceptionReporter
             return $this->artisanCommandTraceId ??= str($_SERVER['LARAVEL_CLOUD_COMMAND_UUID'])->after('comm-')->toString();
         }
 
-        return $this->artisanCommandTraceId ??= (string) Uuid::uuid4();
+        return $this->artisanCommandTraceId ??= (string) Uuid::uuid7();
     }
 
     /**
@@ -954,6 +967,14 @@ class ExceptionReporter
     }
 
     /**
+     * Prepare to report the exception that caused the given failed job.
+     */
+    public function prepareForFailedJob(string $id): void
+    {
+        $this->jobTraceId = $id;
+    }
+
+    /**
      * Flush currently processing job context.
      */
     public function flushJobContext(): void
@@ -961,6 +982,7 @@ class ExceptionReporter
         $this->executionContext = [];
         $this->currentlyProcessingJob = null;
         $this->currentlyProcessingJobAttemptId = null;
+        $this->jobTraceId = null;
     }
 
     /**

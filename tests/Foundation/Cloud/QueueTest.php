@@ -15,11 +15,13 @@ use Illuminate\Foundation\Cloud\AgentAwareLostConnectionDetector;
 use Illuminate\Foundation\Cloud\AgentUnreachableException;
 use Illuminate\Foundation\Cloud\CloudJob;
 use Illuminate\Foundation\Cloud\Events;
+use Illuminate\Foundation\Cloud\ExceptionReporter;
 use Illuminate\Foundation\Cloud\FailedJobProvider;
 use Illuminate\Foundation\Cloud\ManagedQueueNotFoundException;
 use Illuminate\Foundation\Cloud\Queue;
 use Illuminate\Foundation\Cloud\QueueConnector;
 use Illuminate\Foundation\CloudBootstrapper;
+use Illuminate\Foundation\Exceptions\Renderer\Mappers\BladeMapper;
 use Illuminate\Foundation\Testing\DatabaseMigrations;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\RequestException;
@@ -637,6 +639,86 @@ class QueueTest extends TestCase
                 'duration_ms' => 0,
             ],
         ], $eventsFake->emitted);
+    }
+
+    public function testItLinksTheReportedExceptionToTheFailedJob()
+    {
+        $this->travelTo('2000-01-02 03:04:05.060708');
+        $eventsFake = $this->fakeEvents();
+        [$queue, $agent] = $this->fakeQueue();
+        $failerFake = $this->fakeFailer();
+        $exceptionReporter = new ExceptionReporter(
+            $eventsFake,
+            $this->app[BladeMapper::class],
+            $this->app->basePath().DIRECTORY_SEPARATOR,
+            [
+                'stop' => true,
+                'capture_request_payload' => false,
+                'redact_request_payload_fields' => [],
+                'redact_headers' => [],
+                'redact_command_input_fields' => [],
+            ],
+        );
+        $failedJobProvider = new FailedJobProvider($failerFake, $eventsFake, $this->app['encrypter'], $exceptionReporter);
+        $failedJobProvider->setQueue($queue);
+        $this->app[FailedJobProvider::class] = $failedJobProvider;
+
+        $agent->pushJob();
+        $job = $queue->pop();
+        $exceptionReporter->prepareForJob($job);
+        $job->fail();
+
+        // The worker marks the job as failed before it reports the exception that
+        // caused the failure, so the exception is able to reference the ID that
+        // was generated while the failed job event was emitted.
+        $failedJobProvider->log('cloud', 'default', json_encode(['payload' => 'here']), $e = new RuntimeException('Whoops!'));
+        $exceptionReporter($e);
+
+        $failedJob = collect($eventsFake->emitted)->firstWhere('_cloud_event', 'failed_job');
+        $exception = collect($eventsFake->emitted)->firstWhere('_cloud_event', 'exception');
+
+        $this->assertTrue(Str::isUuid($failedJob['id']));
+        $this->assertSame($failedJob['id'], $exception['trace_id']);
+    }
+
+    public function testItDoesNotLinkTheFailedJobToExceptionsFromLaterJobs()
+    {
+        $this->travelTo('2000-01-02 03:04:05.060708');
+        $eventsFake = $this->fakeEvents();
+        [$queue, $agent] = $this->fakeQueue();
+        $failerFake = $this->fakeFailer();
+        $exceptionReporter = new ExceptionReporter(
+            $eventsFake,
+            $this->app[BladeMapper::class],
+            $this->app->basePath().DIRECTORY_SEPARATOR,
+            [
+                'stop' => true,
+                'capture_request_payload' => false,
+                'redact_request_payload_fields' => [],
+                'redact_headers' => [],
+                'redact_command_input_fields' => [],
+            ],
+        );
+        $failedJobProvider = new FailedJobProvider($failerFake, $eventsFake, $this->app['encrypter'], $exceptionReporter);
+        $failedJobProvider->setQueue($queue);
+        $this->app[FailedJobProvider::class] = $failedJobProvider;
+
+        $agent->pushJob();
+        $job = $queue->pop();
+        $exceptionReporter->prepareForJob($job);
+        $job->fail();
+        $failedJobProvider->log('cloud', 'default', json_encode(['payload' => 'here']), new RuntimeException('Whoops!'));
+
+        $exceptionReporter->flushJobContext();
+        $agent->pushJob();
+        $exceptionReporter->prepareForJob($queue->pop());
+        $exceptionReporter(new RuntimeException('Unrelated.'));
+
+        $failedJob = collect($eventsFake->emitted)->firstWhere('_cloud_event', 'failed_job');
+        $exception = collect($eventsFake->emitted)->last(fn ($event) => $event['_cloud_event'] === 'exception');
+
+        $this->assertTrue(Str::isUuid($exception['trace_id']));
+        $this->assertNotSame($failedJob['id'], $exception['trace_id']);
     }
 
     public function testItEmitsFailedJobEventsWithExceptionPreviewWithMessage()
