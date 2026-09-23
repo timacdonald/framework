@@ -56,7 +56,7 @@ class ExceptionReporter
     /**
      * The trace ID for the current job attempt.
      */
-    protected ?string $jobTraceId = null;
+    protected ?string $failedJobId = null;
 
     /**
      * Proactively captured execution context.
@@ -162,6 +162,7 @@ class ExceptionReporter
     {
         return [
             '_cloud_event' => 'exception',
+            'id' => (string) Uuid::uuid7(), // TODO: do that magic timestamp stuff from cloud failed jobs
             'timestamp' => $this->timestamp(),
             'exception_context' => $this->exceptionContext($e),
             'laravel_context' => $this->laravelContext(),
@@ -237,8 +238,9 @@ class ExceptionReporter
     protected function jobExecutionDetails(Throwable $e): array
     {
         return [
-            'trace_id' => $this->jobTraceId(),
+            'trace_id' => 'TODO',
             'execution_type' => 'job',
+            'failed_job_id' => $this->failedJobId,
             'execution_context' => [
                 ...$this->executionContext,
                 'attempt_id' => $this->currentlyProcessingJobAttemptId(),
@@ -248,14 +250,6 @@ class ExceptionReporter
                 'queue' => $this->normalizedQueue(),
             ],
         ];
-    }
-
-    /**
-     * Retrieve the job execution trace ID.
-     */
-    protected function jobTraceId(): string
-    {
-        return $this->jobTraceId ??= (string) Uuid::uuid7();
     }
 
     /**
@@ -290,7 +284,6 @@ class ExceptionReporter
      */
     protected function consoleTraceId(): string
     {
-        // TODO jobs should inherit this from the queue worker
         // TODO scheduled tasks
         if (isset($_SERVER['LARAVEL_CLOUD_COMMAND_UUID'])) {
             return $this->artisanCommandTraceId ??= str($_SERVER['LARAVEL_CLOUD_COMMAND_UUID'])->after('comm-')->toString();
@@ -971,7 +964,7 @@ class ExceptionReporter
      */
     public function prepareForFailedJob(string $id): void
     {
-        $this->jobTraceId = $id;
+        $this->failedJobId = $id;
     }
 
     /**
@@ -982,7 +975,7 @@ class ExceptionReporter
         $this->executionContext = [];
         $this->currentlyProcessingJob = null;
         $this->currentlyProcessingJobAttemptId = null;
-        $this->jobTraceId = null;
+        $this->failedJobId = null;
     }
 
     /**
