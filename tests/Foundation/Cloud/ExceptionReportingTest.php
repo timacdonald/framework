@@ -5,6 +5,9 @@ namespace Illuminate\Tests\Foundation\Cloud;
 use Closure;
 use Exception;
 use Illuminate\Auth\GenericUser;
+use Illuminate\Console\Events\ScheduledTaskFinished;
+use Illuminate\Console\Events\ScheduledTaskStarting;
+use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Contracts\Debug\ExceptionHandler;
 use Illuminate\Contracts\Queue\Job as JobContract;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -51,6 +54,10 @@ class ExceptionReportingTest extends TestCase
     use LazilyRefreshDatabase, WithConsoleEvents;
 
     protected $serverSettingsToRestore = [];
+
+    protected $reportedScheduledTaskStreams = null;
+
+    protected $reportedScheduledTasks = 0;
 
     protected function setUp(): void
     {
@@ -1219,6 +1226,87 @@ class ExceptionReportingTest extends TestCase
         $this->markTestIncomplete('TODO');
     }
 
+    public function testItReportsTheUrlAsItWasRequested(): void
+    {
+        $this->setupExceptionReporting();
+        $streams = $this->fakeEventsStreams();
+
+        Route::get('/users/{user}', function () {
+            $this->setRunningInConsole(false);
+
+            throw new RuntimeException('Whoops!');
+        });
+
+        // The parameters are out of order, one is given twice, one holds a
+        // character that would be encoded, one is an array, and one is given
+        // without a value.
+        $this->get('http://localhost/users/123?b=2&a=1&a=3&filter=a b&x[]=1&x[]=2&flag')->assertServerError();
+
+        $this->assertCount(1, $streams);
+        $streams[0]->assertWrittenJson(function (array $payload) {
+            $this->assertSame(
+                'http://localhost/users/123?b=2&a=1&a=3&filter=a b&x[]=1&x[]=2&flag',
+                $payload['execution_context']['url'],
+            );
+
+            return true;
+        });
+    }
+
+    public function testItReportsTheRequestedPathWithoutTrimmingIt(): void
+    {
+        $this->setupExceptionReporting();
+        $streams = $this->fakeEventsStreams();
+
+        Route::get('/users/{user}', function () {
+            $this->setRunningInConsole(false);
+
+            throw new RuntimeException('Whoops!');
+        });
+
+        // The request is handled directly, as the test helpers trim trailing
+        // slashes from the URL before the application sees them.
+        $this->app->make(\Illuminate\Contracts\Http\Kernel::class)->handle(
+            \Illuminate\Http\Request::create('http://localhost/users/123/')
+        );
+
+        $this->assertCount(1, $streams);
+        $streams[0]->assertWrittenJson(function (array $payload) {
+            // The trailing slash is retained, rather than being trimmed.
+            $this->assertSame(
+                'http://localhost/users/123/',
+                $payload['execution_context']['url'],
+            );
+
+            return true;
+        });
+    }
+
+    public function testItReportsTheRootPathAsItWasRequested(): void
+    {
+        $this->setupExceptionReporting();
+        $streams = $this->fakeEventsStreams();
+
+        Route::get('/', function () {
+            $this->setRunningInConsole(false);
+
+            throw new RuntimeException('Whoops!');
+        });
+
+        $this->get('http://localhost/')->assertServerError();
+
+        $this->assertCount(1, $streams);
+        $streams[0]->assertWrittenJson(function (array $payload) {
+            // The root path is reported, rather than the host alone.
+            $this->assertSame(
+                'http://localhost/',
+                $payload['execution_context']['url'],
+            );
+
+            return true;
+        });
+    }
+
     public function testItCapturesRequestExecutionContext(): void
     {
         $this->freezeTime();
@@ -2226,27 +2314,395 @@ class ExceptionReportingTest extends TestCase
 
         $this->assertCount(1, $streams);
         $streams[0]->assertWrittenJson(function (array $payload) {
-            // The name falls back to the console input, and the class is
-            // simply unknown. Only the command line, which cannot be parsed
-            // without the command, reports the reason.
+            // The name falls back to the console input, while the class and
+            // the command line, which both need the command itself, are
+            // simply unknown.
             $this->assertArrayNotHasKey('_laravel_cloud_error', $payload);
             $this->assertSame('command', $payload['execution_type']);
 
             $this->assertSame('unknown-command', $payload['execution_context']['name']);
             $this->assertNull($payload['execution_context']['class']);
-            $this->assertSame(
-                '_laravel_cloud_error: The command [unknown-command] does not exist.',
-                $payload['execution_context']['command'],
-            );
+            $this->assertNull($payload['execution_context']['command']);
             $this->assertSame('Whoops!', $payload['message']);
 
             return true;
         });
     }
 
+    public function testItCapturesTheClassOfScheduledCallbacks(): void
+    {
+        $this->setupExceptionReporting();
+
+        $this->assertSame(
+            Closure::class,
+            $this->reportedScheduledTaskClass(fn (Schedule $schedule) => $schedule->call(fn () => null)),
+        );
+
+        $this->assertSame(
+            ScheduledTaskCallback::class,
+            $this->reportedScheduledTaskClass(fn (Schedule $schedule) => $schedule->call(new ScheduledTaskCallback)),
+        );
+
+        $this->assertSame(
+            ScheduledTaskCallback::class,
+            $this->reportedScheduledTaskClass(
+                fn (Schedule $schedule) => $schedule->call([new ScheduledTaskCallback, 'handle']),
+            ),
+        );
+
+        $this->assertSame(
+            ScheduledTaskCallback::class,
+            $this->reportedScheduledTaskClass(
+                fn (Schedule $schedule) => $schedule->call(ScheduledTaskCallback::class.'@handle'),
+            ),
+        );
+
+        // The class is still reported when the task was given a name of its
+        // own, as the name no longer identifies it.
+        $this->assertSame(
+            ScheduledTaskCallback::class,
+            $this->reportedScheduledTaskClass(
+                fn (Schedule $schedule) => $schedule->call(new ScheduledTaskCallback)->name('Prune stale records'),
+            ),
+        );
+    }
+
+    public function testItCapturesTheClassOfScheduledCommands(): void
+    {
+        $this->setupExceptionReporting();
+        $streams = $this->fakeEventsStreams();
+        Artisan::registerCommand(new ExceptionReportingTestCommand);
+
+        // The class is resolved away when the task is defined, so the name
+        // alone does not identify it.
+        $task = $this->app->make(Schedule::class)
+            ->command(ExceptionReportingTestCommand::class)
+            ->everyMinute();
+
+        Event::dispatch(new ScheduledTaskStarting($task));
+
+        report(new RuntimeException('Whoops!'));
+
+        $this->assertCount(1, $streams);
+        $streams[0]->assertWrittenJson(function (array $payload) {
+            $this->assertSame('php artisan test-class-command', $payload['execution_context']['name']);
+            $this->assertSame(ExceptionReportingTestCommand::class, $payload['execution_context']['class']);
+
+            return true;
+        });
+    }
+
+    public function testItDoesNotCaptureAClassForScheduledTasksThatAreNotCommands(): void
+    {
+        $this->setupExceptionReporting();
+        $streams = $this->fakeEventsStreams();
+
+        $task = $this->app->make(Schedule::class)
+            ->exec('rsync -a /a /b')
+            ->everyMinute();
+
+        Event::dispatch(new ScheduledTaskStarting($task));
+
+        report(new RuntimeException('Whoops!'));
+
+        $this->assertCount(1, $streams);
+        $streams[0]->assertWrittenJson(function (array $payload) {
+            $this->assertSame('rsync -a /a /b', $payload['execution_context']['name']);
+            $this->assertNull($payload['execution_context']['class']);
+
+            return true;
+        });
+    }
+
+    public function testItCapturesScheduledTasksWithoutATimezone(): void
+    {
+        $this->freezeTime();
+        $this->setupExceptionReporting();
+        $streams = $this->fakeEventsStreams();
+
+        // A task is given no timezone of its own, and the schedule's default
+        // may be null, e.g. when the application has no configured timezone.
+        $task = $this->app->make(Schedule::class)
+            ->call(fn () => report(new RuntimeException('Whoops!')))
+            ->name('test-scheduled-task')
+            ->everyMinute();
+
+        $task->timezone = null;
+
+        $this->runArtisanCommand(['artisan', 'schedule:run']);
+
+        $this->assertCount(1, $streams);
+        $streams[0]->assertWrittenJsonContains([
+            'execution_type' => 'scheduled_task',
+            'execution_context' => [
+                'timestamp' => now()->format('Y-m-d H:i:s.u'),
+                'name' => 'test-scheduled-task',
+                'class' => Closure::class,
+                'cron' => '* * * * *',
+                'timezone' => null,
+                'repeat_seconds' => null,
+                'without_overlapping' => false,
+                'on_one_server' => false,
+                'run_in_background' => false,
+                'even_in_maintenance_mode' => false,
+            ],
+        ]);
+    }
+
     public function testItCapturesScheduledTaskExecutionContext(): void
     {
-        $this->markTestIncomplete('TODO');
+        $this->freezeTime();
+        $this->setupExceptionReporting();
+        $streams = $this->fakeEventsStreams();
+
+        $this->app->make(Schedule::class)
+            ->call(fn () => report(new RuntimeException('Whoops!')))
+            ->name('test-scheduled-task')
+            ->everyMinute()
+            ->timezone('Australia/Melbourne');
+
+        $this->runArtisanCommand(['artisan', 'schedule:run']);
+
+        $this->assertCount(1, $streams);
+        $streams[0]->assertWrittenJsonContains([
+            'execution_type' => 'scheduled_task',
+            'execution_context' => [
+                'timestamp' => now()->format('Y-m-d H:i:s.u'),
+                'name' => 'test-scheduled-task',
+                'class' => Closure::class,
+                'cron' => '* * * * *',
+                'timezone' => 'Australia/Melbourne',
+                'repeat_seconds' => null,
+                'without_overlapping' => false,
+                'on_one_server' => false,
+                'run_in_background' => false,
+                'even_in_maintenance_mode' => false,
+            ],
+        ]);
+    }
+
+    public function testItCapturesTheRepeatSecondsOfSubMinuteScheduledTasks(): void
+    {
+        $this->setupExceptionReporting();
+        $streams = $this->fakeEventsStreams();
+
+        // The task is started directly, as the scheduler runs a sub-minute
+        // task repeatedly until the minute is over.
+        $task = $this->app->make(Schedule::class)
+            ->call(fn () => null)
+            ->name('test-scheduled-task')
+            ->everyTenSeconds();
+
+        Event::dispatch(new ScheduledTaskStarting($task));
+
+        report(new RuntimeException('Whoops!'));
+
+        $this->assertCount(1, $streams);
+        $streams[0]->assertWrittenJson(function (array $payload) {
+            $this->assertSame(10, $payload['execution_context']['repeat_seconds']);
+            $this->assertSame('* * * * *', $payload['execution_context']['cron']);
+
+            return true;
+        });
+    }
+
+    public function testItAttributesExceptionsThrownWithinScheduledTasksToTheTask(): void
+    {
+        $this->setupExceptionReporting();
+        $streams = $this->fakeEventsStreams();
+
+        // The task's own exception is reported by the scheduler once the task
+        // has run, rather than by the task itself.
+        $this->app->make(Schedule::class)
+            ->call(fn () => throw new RuntimeException('Whoops!'))
+            ->name('test-scheduled-task')
+            ->everyMinute();
+
+        $this->runArtisanCommand(['artisan', 'schedule:run']);
+
+        $this->assertCount(1, $streams);
+        $streams[0]->assertWrittenJsonContains([
+            'execution_type' => 'scheduled_task',
+            'message' => 'Whoops!',
+        ]);
+    }
+
+    public function testItAttributesFailingScheduledCommandsToTheTask(): void
+    {
+        $this->setupExceptionReporting();
+        $streams = $this->fakeEventsStreams();
+
+        $task = $this->app->make(Schedule::class)
+            ->exec('exit 1')
+            ->name('test-scheduled-task')
+            ->everyMinute();
+
+        // A scheduled command that exits non-zero dispatches the "finished"
+        // event and is only then reported as a failure by the scheduler, so
+        // the events are dispatched here in that order.
+        Event::dispatch(new ScheduledTaskStarting($task));
+        $task->exitCode = 1;
+        Event::dispatch(new ScheduledTaskFinished($task, 0.0));
+
+        report(new RuntimeException('Scheduled command [exit 1] failed with exit code [1].'));
+
+        $this->assertCount(1, $streams);
+        $streams[0]->assertWrittenJson(function (array $payload) {
+            $this->assertSame('scheduled_task', $payload['execution_type']);
+            $this->assertSame('exit 1', $payload['execution_context']['name']);
+
+            return true;
+        });
+    }
+
+    public function testItReportsTheCommandAsTheScheduledTaskName(): void
+    {
+        $this->setupExceptionReporting();
+
+        $this->assertSame(
+            'php artisan inspire',
+            $this->reportedScheduledTaskName(fn (Schedule $schedule) => $schedule->command('inspire')),
+        );
+
+        // The description is not used, as it may be changed without the task
+        // itself changing.
+        $this->assertSame(
+            'php artisan inspire',
+            $this->reportedScheduledTaskName(
+                fn (Schedule $schedule) => $schedule->command('inspire')->name('Inspire people'),
+            ),
+        );
+    }
+
+    public function testItReportsTheExecutedCommandAsTheScheduledTaskName(): void
+    {
+        $this->setupExceptionReporting();
+
+        $this->assertSame(
+            'rsync -a /a /b',
+            $this->reportedScheduledTaskName(fn (Schedule $schedule) => $schedule->exec('rsync -a /a /b')),
+        );
+    }
+
+    public function testItReportsTheClosureLocationAsTheScheduledTaskName(): void
+    {
+        $this->setupExceptionReporting();
+
+        $line = __LINE__ + 3;
+
+        $name = $this->reportedScheduledTaskName(
+            fn (Schedule $schedule) => $schedule->call(fn () => null),
+        );
+
+        // A task given neither a description nor a name is identified by the
+        // closure it runs, as every one of them is otherwise a "Callback".
+        $this->assertSame(
+            'Closure at: tests/Foundation/Cloud/ExceptionReportingTest.php:'.$line,
+            $name,
+        );
+    }
+
+    public function testItReportsTheDescriptionAsTheScheduledCallbackTaskName(): void
+    {
+        $this->setupExceptionReporting();
+
+        // There is no command to fall back on, so the description is used.
+        $this->assertSame(
+            'Prune stale records',
+            $this->reportedScheduledTaskName(
+                fn (Schedule $schedule) => $schedule->call(fn () => null)->name('Prune stale records'),
+            ),
+        );
+    }
+
+    public function testItReportsTheCallbackAsTheScheduledTaskName(): void
+    {
+        $this->setupExceptionReporting();
+
+        $this->assertSame(
+            'App\Tasks\PruneRecords',
+            $this->reportedScheduledTaskName(
+                fn (Schedule $schedule) => $schedule->call('App\Tasks\PruneRecords'),
+            ),
+        );
+
+        $this->assertSame(
+            ScheduledTaskCallback::class,
+            $this->reportedScheduledTaskName(
+                fn (Schedule $schedule) => $schedule->call(new ScheduledTaskCallback),
+            ),
+        );
+
+        $this->assertSame(
+            ScheduledTaskCallback::class,
+            $this->reportedScheduledTaskName(
+                fn (Schedule $schedule) => $schedule->call([new ScheduledTaskCallback, 'handle']),
+            ),
+        );
+    }
+
+    public function testItStopsAttributingExceptionsToAFailedScheduledCommandOnceReported(): void
+    {
+        $this->setupExceptionReporting();
+        $streams = $this->fakeEventsStreams();
+
+        $task = $this->app->make(Schedule::class)
+            ->exec('exit 1')
+            ->name('test-scheduled-task')
+            ->everyMinute();
+
+        Event::dispatch(new ScheduledTaskStarting($task));
+        $task->exitCode = 1;
+        Event::dispatch(new ScheduledTaskFinished($task, 0.0));
+
+        // The scheduler reports the failure once the task has finished...
+        report(new RuntimeException('Scheduled command [exit 1] failed with exit code [1].'));
+
+        // ...and anything reported after it belongs to the command again.
+        report(new RuntimeException('Whoops!'));
+
+        $this->assertCount(1, $streams);
+        $streams[0]->assertWritten(function (string $stream) {
+            [$failure, $next] = array_map(
+                fn ($write) => json_decode($write, associative: true, flags: JSON_THROW_ON_ERROR),
+                array_slice(explode("\n", $stream), 0, 2),
+            );
+
+            $this->assertSame('scheduled_task', $failure['execution_type']);
+            $this->assertSame('command', $next['execution_type']);
+
+            return true;
+        });
+    }
+
+    public function testItAttributesExceptionsOutsideOfScheduledTasksToTheCommand(): void
+    {
+        $this->setupExceptionReporting();
+        $streams = $this->fakeEventsStreams();
+
+        $this->app->make(Schedule::class)
+            ->call(fn () => null)
+            ->name('test-scheduled-task')
+            ->everyMinute();
+
+        // Registered after the reporter, so the task context has been flushed
+        // by the time this runs.
+        Event::listen(fn (ScheduledTaskFinished $event) => report(new RuntimeException('Whoops!')));
+
+        $this->runArtisanCommand(['artisan', 'schedule:run']);
+
+        $this->assertCount(1, $streams);
+        $streams[0]->assertWrittenJson(function (array $payload) {
+            $this->assertSame('command', $payload['execution_type']);
+            $this->assertSame('schedule:run', $payload['execution_context']['name']);
+            $this->assertSame(
+                \Illuminate\Console\Scheduling\ScheduleRunCommand::class,
+                $payload['execution_context']['class'],
+            );
+            $this->assertSame('schedule:run', $payload['execution_context']['command']);
+
+            return true;
+        });
     }
 
     public function testItCapturesFatalErrors(): void
@@ -2700,6 +3156,52 @@ class ExceptionReportingTest extends TestCase
     }
 
     /**
+     * Retrieve the class reported for the given scheduled task.
+     */
+    protected function reportedScheduledTaskClass(callable $define): ?string
+    {
+        return $this->reportedScheduledTaskContext($define)['class'];
+    }
+
+    /**
+     * Retrieve the name reported for the given scheduled task.
+     */
+    protected function reportedScheduledTaskName(callable $define): ?string
+    {
+        return $this->reportedScheduledTaskContext($define)['name'];
+    }
+
+    /**
+     * Retrieve the execution context reported for the given scheduled task.
+     *
+     * The streams are faked once per test, as the events are written to the
+     * socket the reporter has already opened, so each task reported within a
+     * test is another write to the same stream.
+     */
+    protected function reportedScheduledTaskContext(callable $define): array
+    {
+        $streams = $this->reportedScheduledTaskStreams ??= $this->fakeEventsStreams();
+
+        Event::dispatch(new ScheduledTaskStarting($define($this->app->make(Schedule::class))));
+
+        report(new RuntimeException('Whoops!'));
+
+        $context = [];
+
+        $streams[0]->assertWrittenJsonContains([], $this->reportedScheduledTasks++);
+
+        $streams[0]->assertWritten(function (string $stream) use (&$context) {
+            $payload = json_decode(explode("\n", $stream)[$this->reportedScheduledTasks - 1], associative: true);
+
+            $context = $payload['execution_context'];
+
+            return true;
+        });
+
+        return $context;
+    }
+
+    /**
      * Run the given command line, as a console process would.
      *
      * The command is given the console input it was invoked with, rather than
@@ -3023,6 +3525,19 @@ class ExceptionReportingJobThatReportsException implements ShouldQueue
         call_user_func($this->callback);
 
         report(new RuntimeException('Whoops!'));
+    }
+}
+
+class ScheduledTaskCallback
+{
+    public function __invoke()
+    {
+        //
+    }
+
+    public function handle()
+    {
+        //
     }
 }
 

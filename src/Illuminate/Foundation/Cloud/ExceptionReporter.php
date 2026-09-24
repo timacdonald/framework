@@ -2,6 +2,11 @@
 
 namespace Illuminate\Foundation\Cloud;
 
+use Closure;
+use DateTimeZone;
+use Illuminate\Console\Application as ConsoleApplication;
+use Illuminate\Console\Scheduling\CallbackEvent as CallbackTask;
+use Illuminate\Console\Scheduling\Event as ScheduledTask;
 use Illuminate\Contracts\Queue\Job;
 use Illuminate\Foundation\Bootstrap\HandleExceptions;
 use Illuminate\Foundation\Exceptions\Renderer\Mappers\BladeMapper;
@@ -17,6 +22,8 @@ use Illuminate\Support\Facades\Exceptions;
 use Illuminate\Support\Facades\Request;
 use Illuminate\View\ViewException;
 use Ramsey\Uuid\Uuid;
+use ReflectionClass;
+use ReflectionFunction;
 use RuntimeException;
 use Spatie\LaravelIgnition\Exceptions\ViewException as IgnitionViewException;
 use Symfony\Component\Console\Exception\CommandNotFoundException;
@@ -34,14 +41,39 @@ use Throwable;
 class ExceptionReporter
 {
     /**
+     * Indicates the currently reporting exception is a view exception.
+     */
+    protected bool $reportingViewException = false;
+
+    /**
+     * The name of the currently running Artisan command.
+     */
+    protected ?string $currentlyRunningCommandName = null;
+
+    /**
      * The trace ID for the current artisan command execution.
      */
     protected ?string $artisanCommandTraceId = null;
 
     /**
-     * Indicates the currently reporting exception is a view exception.
+     * The console input of the currently running Artisan command.
      */
-    protected bool $reportingViewException = false;
+    protected ?ConsoleInput $currentConsoleInput = null;
+
+    /**
+     * The console input built from the process arguments. Fallback when console input is not yet set.
+     */
+    protected ?ArgvInput $currentFallbackArgvInput = null;
+
+    /**
+     * The currently running scheduled task.
+     */
+    protected ?ScheduledTask $currentlyRunningScheduledTask = null;
+
+    /**
+     * Indicates the currently running scheduled task has finished with its failure yet to be reported.
+     */
+    protected bool $scheduledTaskAwaitingFailureReport = false;
 
     /**
      * The currently executing job on the queue.
@@ -54,16 +86,9 @@ class ExceptionReporter
     protected ?string $currentlyProcessingJobAttemptId = null;
 
     /**
-     * The trace ID for the current job attempt.
+     * The ID of the failed job record for the exception being reported.
      */
     protected ?string $failedJobId = null;
-
-    /**
-     * Proactively captured execution context.
-     *
-     * @var array<string, mixed>
-     */
-    protected array $executionContext = [];
 
     /**
      * The cached normalized queue names, keyed by "connection:queue".
@@ -80,19 +105,17 @@ class ExceptionReporter
     protected ?array $connectionConfig = null;
 
     /**
-     * The name of the currently running Artisan command.
+     * Proactively captured execution context, keyed by execution type.
+     *
+     * @var array{
+     *    job: array<string, mixed>,
+     *    scheduled_task: array<string, mixed>,
+     * }
      */
-    protected ?string $currentlyRunningCommandName = null;
-
-    /**
-     * The console input of the currently running Artisan command.
-     */
-    protected ?ConsoleInput $currentConsoleInput = null;
-
-    /**
-     * The console input built from the process arguments. Fallback when console input is not yet set.
-     */
-    protected ?ArgvInput $currentFallbackArgvInput = null;
+    protected array $executionContext = [
+        'job' => [],
+        'scheduled_task' => [],
+    ];
 
     /**
      * Create a new Exception Reporter instance.
@@ -136,6 +159,10 @@ class ExceptionReporter
             return null;
         } finally {
             $this->reportingViewException = $previousReportingViewException;
+
+            if ($this->scheduledTaskAwaitingFailureReport) {
+                $this->flushScheduledTaskContext();
+            }
         }
     }
 
@@ -151,6 +178,14 @@ class ExceptionReporter
         }
 
         return $e;
+    }
+
+    /**
+     * Determine if the given exception is a view exception.
+     */
+    protected function isViewException(Throwable $e): bool
+    {
+        return $e instanceof ViewException || $e instanceof IgnitionViewException;
     }
 
     /**
@@ -220,7 +255,8 @@ class ExceptionReporter
         try {
             return match (true) {
                 $this->isProcessingJob() => $this->jobExecutionDetails($e),
-                App::runningInConsole() => $this->consoleExecutionDetails($e),
+                $this->isRunningScheduledTask() => $this->scheduledTaskExecutionDetails($e),
+                App::runningInConsole() => $this->consoleCommandExecutionDetails($e),
                 default => $this->requestExecutionDetails($e),
             };
         } catch (Throwable $e) {
@@ -228,235 +264,6 @@ class ExceptionReporter
                 '_laravel_cloud_error' => $e->getMessage(),
             ];
         }
-    }
-
-    /**
-     * Retrieve the currently processing job's execution context.
-     *
-     * @return array<string, mixed>
-     */
-    protected function jobExecutionDetails(Throwable $e): array
-    {
-        return [
-            'trace_id' => 'TODO',
-            'execution_type' => 'job',
-            'failed_job_id' => $this->failedJobId,
-            'execution_context' => [
-                ...$this->executionContext,
-                'attempt_id' => $this->currentlyProcessingJobAttemptId(),
-                'uuid' => $this->currentlyProcessingJob->uuid(),
-                'name' => $this->currentlyProcessingJob->resolveName(),
-                'connection' => $this->currentlyProcessingJob->getConnectionName(),
-                'queue' => $this->normalizedQueue(),
-            ],
-        ];
-    }
-
-    /**
-     * The currently processing job attempt ID.
-     */
-    protected function currentlyProcessingJobAttemptId(): string
-    {
-        return $this->currentlyProcessingJobAttemptId ??= (string) Uuid::uuid7();
-    }
-
-    /**
-     * Retrieve the console execution context.
-     *
-     * @return array<string, mixed>
-     */
-    protected function consoleExecutionDetails(Throwable $e): array
-    {
-        return [
-            'trace_id' => $this->consoleTraceId(),
-            'execution_type' => 'command',
-            'execution_context' => [
-                'timestamp' => $this->laravelStartedAtTimestamp(),
-                'name' => $this->consoleCommandName(),
-                'class' => $this->consoleCommandClass(),
-                'command' => $this->consoleCommandLine(),
-            ],
-        ];
-    }
-
-    /**
-     * Retrieve the console execution trace ID.
-     */
-    protected function consoleTraceId(): string
-    {
-        // TODO scheduled tasks
-        if (isset($_SERVER['LARAVEL_CLOUD_COMMAND_UUID'])) {
-            return $this->artisanCommandTraceId ??= str($_SERVER['LARAVEL_CLOUD_COMMAND_UUID'])->after('comm-')->toString();
-        }
-
-        return $this->artisanCommandTraceId ??= (string) Uuid::uuid7();
-    }
-
-    /**
-     * Retrieve the name of the currently running Artisan command.
-     */
-    protected function consoleCommandName(): ?string
-    {
-        return $this->currentlyRunningCommandName ?? $this->currentFallbackArgvInput()->getFirstArgument();
-    }
-
-    /**
-     * Retrieve the class name of the currently running Artisan command.
-     */
-    protected function consoleCommandClass(): ?string
-    {
-        try {
-            $name = $this->consoleCommandName();
-
-            if ($name === null) {
-                return null;
-            }
-
-            $command = Artisan::findCommand($name);
-
-            return $command === null
-                ? null
-                : $command::class;
-        } catch (Throwable $e) {
-            return '_laravel_cloud_error: '.$e->getMessage();
-        }
-    }
-
-    /**
-     * Retrieve the redacted command line.
-     */
-    protected function consoleCommandLine(): string
-    {
-        try {
-            $input = $this->currentConsoleInput();
-
-            $tokens = Arr::wrap($input->getFirstArgument());
-
-            foreach ($input->getRawArguments() as $name => $value) {
-                // Skip the initial argument, which is the command name. We have already captured that above
-                // and do not want to apply any special handling to it.
-                if ($name === 'command' || is_int($name)) {
-                    continue;
-                }
-
-                $transformer = $this->consoleArgumentTransformer($name, $input);
-
-                $tokens = [
-                    ...$tokens,
-                    ...$this->applyTransformationToConsoleInput($value, $transformer),
-                ];
-            }
-
-            foreach ($input->getRawOptions() as $name => $value) {
-                $transformer = $this->consoleOptionTransformer($name, $input);
-
-                $tokens = [
-                    ...$tokens,
-                    ...$this->applyTransformationToConsoleInput($value, $transformer),
-                ];
-            }
-
-            return implode(' ', $tokens);
-        } catch (Throwable $e) {
-            return '_laravel_cloud_error: '.$e->getMessage();
-        }
-    }
-
-    /**
-     * Retrieve a transformer for the given console argument.
-     */
-    protected function consoleArgumentTransformer(string $name, ConsoleInput $input): callable
-    {
-        return $this->shouldRedactConsoleInput($name)
-            ? $this->redactValue(...)
-            : $input->escapeToken(...);
-    }
-
-    /**
-     * Retrieve a transformer for the given console option.
-     */
-    protected function consoleOptionTransformer(string $name, ConsoleInput $input): callable
-    {
-        return function ($value) use ($name, $input) {
-            if (is_bool($value)) {
-                return $value ? "--{$name}" : "--no-{$name}";
-            }
-
-            if ($value === null) {
-                return "--{$name}";
-            }
-
-            if ($this->shouldRedactConsoleInput($name)) {
-                return "--{$name}={$this->redactValue($value)}";
-            }
-
-            return "--{$name}={$input->escapeToken($value)}";
-        };
-    }
-
-    /**
-     * @param  callable(string): string  $transformer
-     * @return list<string>
-     */
-    protected function applyTransformationToConsoleInput(null|bool|string|array $value, callable $transformer): array
-    {
-        return array_map($transformer, $value === null ? [null] : Arr::wrap($value));
-    }
-
-    /**
-     * Retrieve the console input of the currently running Artisan command.
-     */
-    protected function currentConsoleInput(): ConsoleInput
-    {
-        if ($this->currentConsoleInput !== null) {
-            return $this->currentConsoleInput;
-        }
-
-        $input = $this->currentFallbackArgvInput();
-
-        $name = $input->getFirstArgument();
-
-        $command = $name === null
-            ? null
-            : Artisan::findCommand($name);
-
-        if ($command === null) {
-            throw new CommandNotFoundException("The command [{$name}] does not exist.");
-        }
-
-        $command->mergeApplicationDefinition();
-
-        $input->bind($command->getDefinition());
-
-        return $this->currentConsoleInput = $input;
-    }
-
-    /**
-     * Determine if the given command argument or option should be redacted.
-     */
-    protected function shouldRedactConsoleInput(string $name): bool
-    {
-        return in_array($name, $this->config['redact_command_input_fields']);
-    }
-
-    /**
-     * Retrieve the fallback console input built from the process arguments.
-     */
-    protected function currentFallbackArgvInput(): ArgvInput
-    {
-        return $this->currentFallbackArgvInput ??= new ArgvInput;
-    }
-
-    /**
-     * Prepare to process the given command.
-     */
-    public function prepareForCommand(string $name, InputInterface $input): void
-    {
-        $this->currentlyRunningCommandName = $name !== ''
-            ? $name
-            : null;
-
-        $this->currentConsoleInput = $input instanceof ConsoleInput ? $input : null;
     }
 
     /**
@@ -473,7 +280,7 @@ class ExceptionReporter
                 'timestamp' => $this->laravelStartedAtTimestamp(),
                 'headers' => $this->requestHeaders(),
                 'method' => Request::method(),
-                'url' => Request::fullUrl(), // TODO redact query strings parameters
+                'url' => $this->requestUrl(), // TODO redact query strings parameters
                 'ip' => Request::ip(),
                 'route' => $this->requestRouteExecutionDetails(),
                 'payload' => $this->requestPayload($e),
@@ -535,97 +342,6 @@ class ExceptionReporter
     }
 
     /**
-     * Retrieve the request payload.
-     *
-     * @return array<array-key, mixed>|null
-     */
-    protected function requestPayload(Throwable $e): ?array
-    {
-        if (! $this->config['capture_request_payload'] || $e instanceof FatalError) {
-            return null;
-        }
-
-        try {
-            return $this->redactRequestPayload(Request::getFacadeRoot()->request->all());
-        } catch (Throwable $e) {
-            return [
-                '_laravel_cloud_error' => $e->getMessage(),
-            ];
-        }
-    }
-
-    /**
-     * Retrieve the parsed uploaded files.
-     *
-     * @return array<array-key, mixed>|null
-     */
-    protected function requestFiles(Throwable $e): ?array
-    {
-        if (! $this->config['capture_request_payload'] || $e instanceof FatalError) {
-            return null;
-        }
-
-        try {
-            return $this->parseRequestFiles(Request::allFiles());
-        } catch (Throwable $e) {
-            return [
-                '_laravel_cloud_error' => $e->getMessage(),
-            ];
-        }
-    }
-
-    /**
-     * Redact the configured sensitive fields in the given payload.
-     *
-     * @param  array<array-key, mixed>  $payload
-     * @return array<array-key, mixed>
-     */
-    protected function redactRequestPayload(array $payload): array
-    {
-        return Arr::map($payload, function ($value, $key) {
-            if (is_array($value)) {
-                return $this->redactRequestPayload($value);
-            }
-
-            return $this->shouldRedactRequestPayloadField($key, $value)
-                ? $this->redactValue($value === false ? '0' : (string) $value)
-                : $value;
-        });
-    }
-
-    /**
-     * Parse the given uploaded files into their reportable details.
-     *
-     * Values are uploaded files, or nested arrays of them.
-     *
-     * @param  array<array-key, mixed>  $files
-     * @return array<array-key, mixed>
-     */
-    protected function parseRequestFiles(array $files): array
-    {
-        return array_map(function ($file) {
-            if (is_array($file)) {
-                return $this->parseRequestFiles($file);
-            }
-
-            return [
-                'originalName' => $file->getClientOriginalName(),
-                'size' => $file->getSize(),
-                'error' => $file->getError(),
-            ];
-        }, $files);
-    }
-
-    /**
-     * Determine if the given payload field should be redacted.
-     */
-    protected function shouldRedactRequestPayloadField(string $field, mixed $value): bool
-    {
-        return in_array($field, $this->config['redact_request_payload_fields'])
-            && is_scalar($value);
-    }
-
-    /**
      * Redact the given authorization header value, retaining the scheme.
      */
     protected function redactAuthorizationHeaderValue(string $value): string
@@ -679,15 +395,18 @@ class ExceptionReporter
     }
 
     /**
-     * Redact the given value.
+     * Retrieve the requested URL.
      */
-    protected function redactValue(string $value): string
+    protected function requestUrl(): string
     {
-        $length = strlen($value);
+        $request = Request::instance();
 
-        $bytes = $length === 1 ? 'byte' : 'bytes';
+        $query = (string) $request->server->get('QUERY_STRING');
 
-        return "[{$length} {$bytes} redacted]";
+        return $request->getSchemeAndHttpHost()
+            .$request->getBaseUrl()
+            .$request->getPathInfo()
+            .($query === '' ? '' : "?{$query}");
     }
 
     /**
@@ -722,6 +441,601 @@ class ExceptionReporter
                 '_laravel_cloud_error' => $e->getMessage(),
             ];
         }
+    }
+
+    /**
+     * Retrieve the request payload.
+     *
+     * @return array<array-key, mixed>|null
+     */
+    protected function requestPayload(Throwable $e): ?array
+    {
+        if (! $this->config['capture_request_payload'] || $e instanceof FatalError) {
+            return null;
+        }
+
+        try {
+            return $this->redactRequestPayload(Request::instance()->request->all());
+        } catch (Throwable $e) {
+            return [
+                '_laravel_cloud_error' => $e->getMessage(),
+            ];
+        }
+    }
+
+    /**
+     * Redact the configured sensitive fields in the given payload.
+     *
+     * @param  array<array-key, mixed>  $payload
+     * @return array<array-key, mixed>
+     */
+    protected function redactRequestPayload(array $payload): array
+    {
+        return Arr::map($payload, function ($value, $key) {
+            if (is_array($value)) {
+                return $this->redactRequestPayload($value);
+            }
+
+            return $this->shouldRedactRequestPayloadField($key, $value)
+                ? $this->redactValue($value === false ? '0' : (string) $value)
+                : $value;
+        });
+    }
+
+    /**
+     * Determine if the given payload field should be redacted.
+     */
+    protected function shouldRedactRequestPayloadField(string $field, mixed $value): bool
+    {
+        return in_array($field, $this->config['redact_request_payload_fields'])
+            && is_scalar($value);
+    }
+
+    /**
+     * Retrieve the parsed uploaded files.
+     *
+     * @return array<array-key, mixed>|null
+     */
+    protected function requestFiles(Throwable $e): ?array
+    {
+        if (! $this->config['capture_request_payload'] || $e instanceof FatalError) {
+            return null;
+        }
+
+        try {
+            return $this->parseRequestFiles(Request::allFiles());
+        } catch (Throwable $e) {
+            return [
+                '_laravel_cloud_error' => $e->getMessage(),
+            ];
+        }
+    }
+
+    /**
+     * Parse the given uploaded files into their reportable details.
+     *
+     * Values are uploaded files, or nested arrays of them.
+     *
+     * @param  array<array-key, mixed>  $files
+     * @return array<array-key, mixed>
+     */
+    protected function parseRequestFiles(array $files): array
+    {
+        return array_map(function ($file) {
+            if (is_array($file)) {
+                return $this->parseRequestFiles($file);
+            }
+
+            return [
+                'originalName' => $file->getClientOriginalName(),
+                'size' => $file->getSize(),
+                'error' => $file->getError(),
+            ];
+        }, $files);
+    }
+
+    /**
+     * Prepare to process the given command.
+     */
+    public function prepareForCommand(string $name, InputInterface $input): void
+    {
+        $this->currentlyRunningCommandName = $name !== ''
+            ? $name
+            : null;
+
+        $this->currentConsoleInput = $input instanceof ConsoleInput ? $input : null;
+    }
+
+    /**
+     * Retrieve the console execution context.
+     *
+     * @return array<string, mixed>
+     */
+    protected function consoleCommandExecutionDetails(Throwable $e): array
+    {
+        return [
+            'trace_id' => $this->consoleCommandTraceId(),
+            'execution_type' => 'command',
+            'execution_context' => [
+                'timestamp' => $this->laravelStartedAtTimestamp(),
+                'name' => $this->consoleCommandName(),
+                'class' => $this->consoleCommandClass(),
+                'command' => $this->consoleCommandLine(),
+            ],
+        ];
+    }
+
+    /**
+     * Retrieve the console command execution trace ID.
+     */
+    protected function consoleCommandTraceId(): string
+    {
+        if (isset($_SERVER['LARAVEL_CLOUD_COMMAND_UUID'])) {
+            return $this->artisanCommandTraceId ??= str($_SERVER['LARAVEL_CLOUD_COMMAND_UUID'])->after('comm-')->toString();
+        }
+
+        return $this->artisanCommandTraceId ??= (string) Uuid::uuid7();
+    }
+
+    /**
+     * Retrieve the name of the currently running Artisan command.
+     */
+    protected function consoleCommandName(): ?string
+    {
+        return $this->currentlyRunningCommandName ?? $this->currentFallbackArgvInput()->getFirstArgument();
+    }
+
+    /**
+     * Retrieve the class name of the currently running Artisan command.
+     */
+    protected function consoleCommandClass(): ?string
+    {
+        try {
+            $name = $this->consoleCommandName();
+
+            if ($name === null) {
+                return null;
+            }
+
+            $command = Artisan::findCommand($name);
+
+            return $command === null
+                ? null
+                : $command::class;
+        } catch (Throwable $e) {
+            return '_laravel_cloud_error: '.$e->getMessage();
+        }
+    }
+
+    /**
+     * Retrieve the redacted command line.
+     */
+    protected function consoleCommandLine(): ?string
+    {
+        try {
+            // If we are unable to retrieve the console input, we are unable to confidently
+            // redact input values, so we return null to avoid leaking sensitive information.
+            try {
+                $this->currentConsoleInput();
+            } catch (CommandNotFoundException $e) {
+                return null;
+            }
+
+            $tokens = Arr::wrap($this->currentConsoleInput()->getFirstArgument());
+
+            foreach ($this->currentConsoleInput()->getRawArguments() as $name => $value) {
+                // Skip the initial argument, which is the command name. We have already captured that above
+                // and do not want to apply any special handling to it.
+                if ($name === 'command' || is_int($name)) {
+                    continue;
+                }
+
+                $transformer = $this->consoleArgumentTransformer($name);
+
+                $tokens = [
+                    ...$tokens,
+                    ...$this->applyTransformationToConsoleInputValue($value, $transformer),
+                ];
+            }
+
+            foreach ($this->currentConsoleInput()->getRawOptions() as $name => $value) {
+                $transformer = $this->consoleOptionTransformer($name);
+
+                $tokens = [
+                    ...$tokens,
+                    ...$this->applyTransformationToConsoleInputValue($value, $transformer),
+                ];
+            }
+
+            return implode(' ', $tokens);
+        } catch (Throwable $e) {
+            return '_laravel_cloud_error: '.$e->getMessage();
+        }
+    }
+
+    /**
+     * Retrieve a transformer for the given console argument.
+     */
+    protected function consoleArgumentTransformer(string $name): callable
+    {
+        return $this->shouldRedactConsoleInputValue($name)
+            ? $this->redactValue(...)
+            : $this->currentConsoleInput()->escapeToken(...);
+    }
+
+    /**
+     * Retrieve a transformer for the given console option.
+     */
+    protected function consoleOptionTransformer(string $name): callable
+    {
+        return fn ($value) => match (true) {
+            is_bool($value) => $value ? "--{$name}" : "--no-{$name}",
+            is_null($value) => "--{$name}",
+            $this->shouldRedactConsoleInputValue($name) => "--{$name}={$this->redactValue($value)}",
+            default => "--{$name}={$this->currentConsoleInput()->escapeToken($value)}",
+        };
+    }
+
+    /**
+     * Apply the given transformation to each of the given input's values.
+     *
+     * @param  callable(string): string  $transformer
+     * @return list<string>
+     */
+    protected function applyTransformationToConsoleInputValue(null|bool|string|array $value, callable $transformer): array
+    {
+        return array_map($transformer, $value === null ? [null] : Arr::wrap($value));
+    }
+
+    /**
+     * Determine if the given command argument or option should be redacted.
+     */
+    protected function shouldRedactConsoleInputValue(string $name): bool
+    {
+        return in_array($name, $this->config['redact_command_input_fields']);
+    }
+
+    /**
+     * Retrieve the console input of the currently running Artisan command.
+     */
+    protected function currentConsoleInput(): ConsoleInput
+    {
+        if ($this->currentConsoleInput !== null) {
+            return $this->currentConsoleInput;
+        }
+
+        $name = $this->currentFallbackArgvInput()->getFirstArgument();
+
+        $command = $name === null
+            ? null
+            : Artisan::findCommand($name);
+
+        if ($command === null) {
+            throw new CommandNotFoundException("The command [{$name}] does not exist.");
+        }
+
+        $command->mergeApplicationDefinition();
+
+        $this->currentFallbackArgvInput()->bind($command->getDefinition());
+
+        return $this->currentConsoleInput = $this->currentFallbackArgvInput();
+    }
+
+    /**
+     * Retrieve the fallback console input built from the process arguments.
+     */
+    protected function currentFallbackArgvInput(): ArgvInput
+    {
+        return $this->currentFallbackArgvInput ??= new ArgvInput;
+    }
+
+    /**
+     * Prepare to run the given scheduled task.
+     */
+    public function prepareForScheduledTask(ScheduledTask $task): void
+    {
+        $this->currentlyRunningScheduledTask = $task;
+        $this->scheduledTaskAwaitingFailureReport = false;
+
+        $this->executionContext['scheduled_task'] = [
+            'timestamp' => $this->timestamp(),
+        ];
+    }
+
+    /**
+     * Handle the given scheduled task finishing.
+     */
+    public function finishScheduledTask(ScheduledTask $task): void
+    {
+        // The order of failed scheduled task events means when we fail,
+        // we haven't yet received the exception to report. We'll set the
+        // reporter into a waiting state, so that when the exception does
+        // arrive, we also flush the scheduled task state.
+        if ($task->command !== null && $task->exitCode !== 0 && ! $task->runInBackground) {
+            $this->scheduledTaskAwaitingFailureReport = true;
+
+            return;
+        }
+
+        $this->flushScheduledTaskContext();
+    }
+
+    /**
+     * Flush the currently running scheduled task context.
+     */
+    public function flushScheduledTaskContext(): void
+    {
+        $this->currentlyRunningScheduledTask = null;
+        $this->scheduledTaskAwaitingFailureReport = false;
+        $this->executionContext['scheduled_task'] = [];
+    }
+
+    /**
+     * Determine if a scheduled task is running.
+     */
+    protected function isRunningScheduledTask(): bool
+    {
+        return $this->currentlyRunningScheduledTask !== null;
+    }
+
+    /**
+     * Retrieve the currently running scheduled task's execution context.
+     *
+     * @return array<string, mixed>
+     */
+    protected function scheduledTaskExecutionDetails(Throwable $e): array
+    {
+        return [
+            'trace_id' => $this->consoleCommandTraceId(),
+            'execution_type' => 'scheduled_task',
+            'execution_context' => [
+                ...$this->executionContext['scheduled_task'],
+                'name' => $this->scheduledTaskName(),
+                'class' => $this->scheduledTaskClass(),
+                'cron' => $this->currentlyRunningScheduledTask->expression,
+                'timezone' => $this->scheduledTaskTimezone(),
+                'repeat_seconds' => $this->currentlyRunningScheduledTask->repeatSeconds,
+                'without_overlapping' => $this->currentlyRunningScheduledTask->withoutOverlapping,
+                'on_one_server' => $this->currentlyRunningScheduledTask->onOneServer,
+                'run_in_background' => $this->currentlyRunningScheduledTask->runInBackground,
+                'even_in_maintenance_mode' => $this->currentlyRunningScheduledTask->evenInMaintenanceMode,
+            ],
+        ];
+    }
+
+    /**
+     * Retrieve the name of the currently running scheduled task.
+     */
+    protected function scheduledTaskName(): string
+    {
+        if ($this->currentlyRunningScheduledTask instanceof CallbackTask) {
+            return $this->scheduledCallbackTaskName();
+        }
+
+        return str_replace([
+            ConsoleApplication::phpBinary(),
+            ConsoleApplication::artisanBinary(),
+        ], [
+            'php',
+            preg_replace("#['\"]#", '', ConsoleApplication::artisanBinary()),
+        ], $this->currentlyRunningScheduledTask->command ?? '');
+    }
+
+    /**
+     * Retrieve the name of the currently running scheduled callback task.
+     */
+    protected function scheduledCallbackTaskName(): string
+    {
+        $name = $this->currentlyRunningScheduledTask->getSummaryForDisplay();
+
+        if (! in_array($name, ['Closure', 'Callback'])) {
+            return $name;
+        }
+
+        return match (true) {
+            $this->scheduledTaskCallback() instanceof Closure => $this->scheduledClosureTaskName($this->scheduledTaskCallback()),
+            is_string($this->scheduledTaskCallback()) => $this->scheduledTaskCallback(),
+            is_array($this->scheduledTaskCallback()) => is_string($this->scheduledTaskCallback()[0])
+                ? $this->scheduledTaskCallback()[0]
+                : $this->scheduledTaskCallback()[0]::class,
+            default => $this->scheduledTaskCallback()::class,
+        };
+    }
+
+    /**
+     * Retrieve the name of the given scheduled closure task.
+     */
+    protected function scheduledClosureTaskName(Closure $callback): string
+    {
+        $function = new ReflectionFunction($callback);
+
+        return sprintf(
+            'Closure at: %s:%s',
+            $this->normalizeBasePath($function->getFileName() ?: ''),
+            $function->getStartLine(),
+        );
+    }
+
+    /**
+     * Retrieve the class name of the currently running scheduled task.
+     */
+    protected function scheduledTaskClass(): ?string
+    {
+        try {
+            if ($this->currentlyRunningScheduledTask instanceof CallbackTask) {
+                return $this->scheduledCallbackTaskClass();
+            }
+
+            $prefix = 'php '.preg_replace("#['\"]#", '', ConsoleApplication::artisanBinary()).' ';
+
+            if (! str_starts_with($this->scheduledTaskName(), $prefix)) {
+                return null;
+            }
+
+            $command = Artisan::findCommand(
+                explode(' ', substr($this->scheduledTaskName(), strlen($prefix)))[0]
+            );
+
+            return $command === null
+                ? null
+                : $command::class;
+        } catch (Throwable $e) {
+            return '_laravel_cloud_error: '.$e->getMessage();
+        }
+    }
+
+    /**
+     * Retrieve the class name of the currently running scheduled callback task.
+     */
+    protected function scheduledCallbackTaskClass(): ?string
+    {
+        return match (true) {
+            is_object($this->scheduledTaskCallback()) => $this->scheduledTaskCallback()::class,
+            is_array($this->scheduledTaskCallback()) => is_string($this->scheduledTaskCallback()[0])
+                ? $this->scheduledTaskCallback()[0]
+                : $this->scheduledTaskCallback()[0]::class,
+            is_string($this->scheduledTaskCallback()) => class_exists($class = explode('@', $this->scheduledTaskCallback())[0])
+                ? $class
+                : null,
+            default => null,
+        };
+    }
+
+    /**
+     * Retrieve the callback of the currently running scheduled task.
+     */
+    protected function scheduledTaskCallback(): mixed
+    {
+        return (new ReflectionClass($this->currentlyRunningScheduledTask))
+            ->getProperty('callback')
+            ->getValue($this->currentlyRunningScheduledTask);
+    }
+
+    /**
+     * Retrieve the timezone of the currently running scheduled task.
+     */
+    protected function scheduledTaskTimezone(): ?string
+    {
+        return $this->currentlyRunningScheduledTask->timezone instanceof DateTimeZone
+            ? $this->currentlyRunningScheduledTask->timezone->getName()
+            : $this->currentlyRunningScheduledTask->timezone;
+    }
+
+    /**
+     * Prepare to process the given job.
+     */
+    public function prepareForJob(Job $job): void
+    {
+        $this->currentlyProcessingJob = $job;
+
+        $this->executionContext['job'] = [
+            'timestamp' => $this->timestamp(),
+            // Beanstalkd throws an exception when attempting to retrieve the job
+            // after it has been processed. Instead of capturing this value when
+            // an exception occurs, we need to proactively capture the value
+            // before the job has been processed.
+            'attempt' => $job->attempts(),
+        ];
+    }
+
+    /**
+     * Prepare to report the exception that caused the given failed job.
+     */
+    public function prepareForFailedJob(string $id): void
+    {
+        $this->failedJobId = $id;
+    }
+
+    /**
+     * Flush currently processing job context.
+     */
+    public function flushJobContext(): void
+    {
+        $this->executionContext['job'] = [];
+        $this->currentlyProcessingJob = null;
+        $this->currentlyProcessingJobAttemptId = null;
+        $this->failedJobId = null;
+    }
+
+    /**
+     * Determine if a queue worker is running.
+     */
+    protected function isProcessingJob(): bool
+    {
+        return $this->currentlyProcessingJob !== null;
+    }
+
+    /**
+     * Retrieve the currently processing job's execution context.
+     *
+     * @return array<string, mixed>
+     */
+    protected function jobExecutionDetails(Throwable $e): array
+    {
+        return [
+            'trace_id' => 'TODO',
+            'execution_type' => 'job',
+            'failed_job_id' => $this->failedJobId,
+            'execution_context' => [
+                ...$this->executionContext['job'],
+                'attempt_id' => $this->currentlyProcessingJobAttemptId(),
+                'uuid' => $this->currentlyProcessingJob->uuid(),
+                'name' => $this->currentlyProcessingJob->resolveName(),
+                'connection' => $this->currentlyProcessingJob->getConnectionName(),
+                'queue' => $this->normalizedQueue(),
+            ],
+        ];
+    }
+
+    /**
+     * The currently processing job attempt ID.
+     */
+    protected function currentlyProcessingJobAttemptId(): string
+    {
+        return $this->currentlyProcessingJobAttemptId ??= (string) Uuid::uuid7();
+    }
+
+    /**
+     * Normalize the given queue name.
+     */
+    protected function normalizedQueue(): string
+    {
+        [$connection, $queue] = [
+            $this->currentlyProcessingJob->getConnectionName(),
+            $this->currentlyProcessingJob->getQueue(),
+        ];
+
+        $key = "{$connection}:{$queue}";
+
+        if (isset($this->normalizedQueues[$key])) {
+            return $this->normalizedQueues[$key];
+        }
+
+        // TODO trim .fifo
+
+        $this->connectionConfig ??= Config::get("queue.connections.{$connection}") ?? [];
+
+        if (($this->connectionConfig['driver'] ?? null) === 'cloud') {
+            $this->connectionConfig = $this->connectionConfig['connection'];
+        }
+
+        if (($this->connectionConfig['driver'] ?? null) !== 'sqs') {
+            return $this->normalizedQueues[$key] = $queue;
+        }
+
+        if ($this->connectionConfig['prefix'] ?? null) {
+            $prefix = preg_quote($this->connectionConfig['prefix'], '#');
+
+            $queue = preg_replace("#^{$prefix}/#", '', $queue) ?? $queue;
+        }
+
+        if ($this->connectionConfig['suffix'] ?? null) {
+            $suffix = preg_quote($this->connectionConfig['suffix'], '#');
+
+            $queue = preg_replace("#{$suffix}$#", '', $queue) ?? $queue;
+        }
+
+        return $this->normalizedQueues[$key] = $queue;
     }
 
     /**
@@ -899,6 +1213,18 @@ class ExceptionReporter
     }
 
     /**
+     * Redact the given value.
+     */
+    protected function redactValue(string $value): string
+    {
+        $length = strlen($value);
+
+        $bytes = $length === 1 ? 'byte' : 'bytes';
+
+        return "[{$length} {$bytes} redacted]";
+    }
+
+    /**
      * Normalize the file path's base path.
      */
     protected function normalizeBasePath(string $path): string
@@ -908,14 +1234,6 @@ class ExceptionReporter
         }
 
         return substr($path, strlen($this->basePath));
-    }
-
-    /**
-     * Determine if the given exception is a view exception.
-     */
-    protected function isViewException(Throwable $e): bool
-    {
-        return $e instanceof ViewException || $e instanceof IgnitionViewException;
     }
 
     /**
@@ -932,92 +1250,5 @@ class ExceptionReporter
         } catch (Throwable $e) {
             return '_laravel_cloud_error: '.$e->getMessage();
         }
-    }
-
-    /**
-     * Determine if a queue worker is running.
-     */
-    protected function isProcessingJob(): bool
-    {
-        return $this->currentlyProcessingJob !== null;
-    }
-
-    /**
-     * Prepare to process the given job.
-     */
-    public function prepareForJob(Job $job): void
-    {
-        $this->currentlyProcessingJob = $job;
-
-        $this->executionContext = [
-            'timestamp' => $this->timestamp(),
-            // Beanstalkd throws an exception when attempting to retrieve the job
-            // after it has been processed. Instead of capturing this value when
-            // an exception occurs, we need to proactively capture the value
-            // before the job has been processed.
-            'attempt' => $job->attempts(),
-        ];
-    }
-
-    /**
-     * Prepare to report the exception that caused the given failed job.
-     */
-    public function prepareForFailedJob(string $id): void
-    {
-        $this->failedJobId = $id;
-    }
-
-    /**
-     * Flush currently processing job context.
-     */
-    public function flushJobContext(): void
-    {
-        $this->executionContext = [];
-        $this->currentlyProcessingJob = null;
-        $this->currentlyProcessingJobAttemptId = null;
-        $this->failedJobId = null;
-    }
-
-    /**
-     * Normalize the given queue name.
-     */
-    protected function normalizedQueue(): string
-    {
-        [$connection, $queue] = [
-            $this->currentlyProcessingJob->getConnectionName(),
-            $this->currentlyProcessingJob->getQueue(),
-        ];
-
-        $key = "{$connection}:{$queue}";
-
-        if (isset($this->normalizedQueues[$key])) {
-            return $this->normalizedQueues[$key];
-        }
-
-        // TODO trim .fifo
-
-        $this->connectionConfig ??= Config::get("queue.connections.{$connection}") ?? [];
-
-        if (($this->connectionConfig['driver'] ?? null) === 'cloud') {
-            $this->connectionConfig = $this->connectionConfig['connection'];
-        }
-
-        if (($this->connectionConfig['driver'] ?? null) !== 'sqs') {
-            return $this->normalizedQueues[$key] = $queue;
-        }
-
-        if ($this->connectionConfig['prefix'] ?? null) {
-            $prefix = preg_quote($this->connectionConfig['prefix'], '#');
-
-            $queue = preg_replace("#^{$prefix}/#", '', $queue) ?? $queue;
-        }
-
-        if ($this->connectionConfig['suffix'] ?? null) {
-            $suffix = preg_quote($this->connectionConfig['suffix'], '#');
-
-            $queue = preg_replace("#{$suffix}$#", '', $queue) ?? $queue;
-        }
-
-        return $this->normalizedQueues[$key] = $queue;
     }
 }

@@ -3,6 +3,9 @@
 namespace Illuminate\Foundation;
 
 use Illuminate\Console\Events\CommandStarting;
+use Illuminate\Console\Events\ScheduledTaskFinished;
+use Illuminate\Console\Events\ScheduledTaskSkipped;
+use Illuminate\Console\Events\ScheduledTaskStarting;
 use Illuminate\Contracts\Debug\ExceptionHandler as ExceptionHandlerContract;
 use Illuminate\Database\Migrations\Migrator;
 use Illuminate\Foundation\Bootstrap\BootProviders;
@@ -294,6 +297,11 @@ class CloudBootstrapper
 
             $app['events']->listen(fn (Looping $event) => $exceptionReporter->flushJobContext());
             $app['events']->listen(fn (WorkerStopping $event) => $exceptionReporter->flushJobContext());
+
+            $app['events']->listen(fn (ScheduledTaskStarting $event) => $exceptionReporter->prepareForScheduledTask($event->task));
+
+            $app['events']->listen(fn (ScheduledTaskFinished $event) => $exceptionReporter->finishScheduledTask($event->task));
+            $app['events']->listen(fn (ScheduledTaskSkipped $event) => $exceptionReporter->flushScheduledTaskContext());
         } catch (Throwable) {
             return;
         }
